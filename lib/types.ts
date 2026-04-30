@@ -34,12 +34,14 @@ export type Campaign = {
   id: string;
   title: string;
   pageId: string;
+  agentEmail?: string;
   creatorHandle: string;
   creatorName: string;
   status: CampaignStatus;
   paymentStatus: PaymentStatus;
   paidAmount: number;
   videoName?: string;
+  videoStoragePath?: string;
   videoDuration?: string;
   postedOn?: string;
   views?: number;
@@ -52,7 +54,7 @@ export type Campaign = {
 };
 
 export type CheckoutResponse = {
-  mode: "demo" | "whop";
+  mode: "whop";
   planId?: string;
   sessionId?: string;
   purchaseUrl?: string;

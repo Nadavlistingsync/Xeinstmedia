@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createWhopClient } from "@/lib/whop";
+import { getSupabaseServerClient } from "@/lib/supabase-server";
 
 export async function POST(request: Request) {
   const whop = await createWhopClient();
@@ -19,7 +20,27 @@ export async function POST(request: Request) {
   const event = whop.webhooks.unwrap(body, { headers });
 
   if (event.type === "payment.succeeded") {
-    console.log("[renttok] Whop payment succeeded", event.data);
+    const payload = event.data as Record<string, unknown>;
+    const receiptId =
+      (payload.id as string | undefined) ||
+      (payload.receipt_id as string | undefined) ||
+      (payload.receiptId as string | undefined);
+
+    if (receiptId) {
+      const supabase = getSupabaseServerClient();
+      const updateResult = await supabase
+        .from("campaigns")
+        .update({
+          payment_status: "Paid",
+        })
+        .eq("receipt_id", receiptId);
+
+      if (updateResult.error) {
+        console.error("[renttok] Failed to update campaign for receipt", receiptId);
+      }
+    }
+
+    console.log("[renttok] Whop payment succeeded", receiptId ?? "unknown");
   }
 
   return new Response("OK", { status: 200 });

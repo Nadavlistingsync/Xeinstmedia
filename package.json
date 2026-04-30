@@ -9,6 +9,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.105.1",
+    "@vercel/analytics": "^2.0.1",
     "@whop/checkout": "0.0.52",
     "@whop/sdk": "0.0.38",
     "lucide-react": "1.11.0",

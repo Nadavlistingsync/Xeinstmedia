@@ -303,6 +303,12 @@ a:focus-visible,
   opacity: 0.72;
 }
 
+.creator-onboard .secondary-cta {
+  color: #34312c;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+}
+
 .creator-onboard p {
   margin: 0;
   color: var(--muted);
@@ -396,12 +402,16 @@ a:focus-visible,
 
 .user-pill {
   gap: 8px;
-  min-width: 154px;
+  min-width: 0;
+  max-width: 320px;
   height: 42px;
   padding: 0 10px;
   background: transparent;
   border-radius: 8px;
   font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .user-pill span {
@@ -895,7 +905,14 @@ a:focus-visible,
   padding: 0 8px;
   color: #45413b;
   background: var(--surface-2);
+  border: 1px solid var(--line);
   border-radius: 7px;
+  cursor: pointer;
+}
+
+.video-chip:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .row-actions {
@@ -1229,6 +1246,24 @@ a:focus-visible,
 .review-step {
   display: grid;
   gap: 12px;
+}
+
+.checkout-step label {
+  display: grid;
+  gap: 6px;
+  color: #514d45;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.checkout-step input {
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
 }
 
 .booking-summary {

@@ -1,5 +1,5 @@
-import { MarketplaceApp } from "@/components/MarketplaceApp";
+import { AuthGate } from "@/components/AuthGate";
 
 export default function Home() {
-  return <MarketplaceApp />;
+  return <AuthGate />;
 }

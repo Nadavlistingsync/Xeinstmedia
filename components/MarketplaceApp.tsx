@@ -33,8 +33,7 @@ import {
   WalletCards,
   X,
 } from "lucide-react";
-import { ChangeEvent, useMemo, useState } from "react";
-import { campaigns as seededCampaigns, tiktokPages as seededPages } from "@/lib/demo-data";
+import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import { compactNumber, currency, percent, todayLabel } from "@/lib/format";
 import type { Campaign, CampaignStatus, CheckoutResponse, TikTokPage } from "@/lib/types";
 
@@ -51,12 +50,12 @@ type BookingStep = "details" | "checkout" | "upload" | "review";
 
 const navItems = [
   { id: "marketplace", label: "Marketplace", icon: Home },
-  { id: "campaigns", label: "My Campaigns", icon: LayoutDashboard, count: 3 },
-  { id: "creator", label: "Creator Queue", icon: Inbox, count: 2 },
+  { id: "campaigns", label: "My Campaigns", icon: LayoutDashboard },
+  { id: "creator", label: "Creator Queue", icon: Inbox },
 ] as const;
 
 const secondaryNav = [
-  { label: "Messages", icon: MessageCircle, count: 3 },
+  { label: "Messages", icon: MessageCircle },
   { label: "Payments", icon: WalletCards },
   { label: "Saved Pages", icon: Bookmark },
   { label: "Analytics", icon: BarChart3 },
@@ -105,27 +104,129 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function MarketplaceApp() {
+function getUserInitials(email: string) {
+  const [name] = email.split("@");
+  const segments = name
+    .split(/[^a-zA-Z0-9]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((segment) => segment[0]?.toUpperCase() ?? "");
+
+  return segments.join("") || name.slice(0, 2).toUpperCase() || "RT";
+}
+
+type MarketplaceAppProps = {
+  user: {
+    id: string;
+    email: string;
+  };
+};
+
+export function MarketplaceApp({ user }: MarketplaceAppProps) {
   const [view, setView] = useState<AppView>("marketplace");
-  const [pages, setPages] = useState<TikTokPage[]>(seededPages);
-  const [campaigns, setCampaigns] = useState<Campaign[]>(seededCampaigns);
+  const [pages, setPages] = useState<TikTokPage[]>([]);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [query, setQuery] = useState("");
-  const [selectedId, setSelectedId] = useState(seededPages[0]?.id ?? "");
+  const [selectedId, setSelectedId] = useState("");
+  const [loadingData, setLoadingData] = useState(true);
+  const [dataMessage, setDataMessage] = useState("");
   const [savedOnly, setSavedOnly] = useState(false);
   const [bookingOpen, setBookingOpen] = useState(false);
   const [bookingStep, setBookingStep] = useState<BookingStep>("details");
-  const [campaignTitle, setCampaignTitle] = useState("Downtown 2BR Rental");
-  const [agentEmail, setAgentEmail] = useState("agent@urban-key.com");
+  const [campaignTitle, setCampaignTitle] = useState("");
+  const [agentEmail, setAgentEmail] = useState(user.email);
   const [checkout, setCheckout] = useState<CheckoutResponse | null>(null);
   const [videoName, setVideoName] = useState("");
+  const [videoFile, setVideoFile] = useState<File | null>(null);
   const [bookingBusy, setBookingBusy] = useState(false);
   const [bookingError, setBookingError] = useState("");
-  const [creatorHandle, setCreatorHandle] = useState("@yourtiktokhandle");
-  const [creatorPrice, setCreatorPrice] = useState("250");
+  const [creatorHandle, setCreatorHandle] = useState("@xeinstrentalsnyc");
+  const [creatorPrice, setCreatorPrice] = useState("");
   const [creatorBusy, setCreatorBusy] = useState(false);
   const [creatorMessage, setCreatorMessage] = useState("");
 
-  const selectedPage = pages.find((page) => page.id === selectedId) ?? pages[0];
+  const selectedPage = pages.find((page) => page.id === selectedId) ?? pages[0] ?? null;
+
+  useEffect(() => {
+    async function loadData() {
+      setLoadingData(true);
+      setDataMessage("");
+
+      try {
+        const [pagesResponse, campaignsResponse] = await Promise.all([
+          fetch("/api/pages"),
+          fetch("/api/campaigns"),
+        ]);
+
+        const pagesPayload = (await pagesResponse.json()) as {
+          pages?: TikTokPage[];
+          message?: string;
+        };
+        const campaignsPayload = (await campaignsResponse.json()) as {
+          campaigns?: Campaign[];
+          message?: string;
+        };
+
+        if (!pagesResponse.ok || !campaignsResponse.ok) {
+          throw new Error(
+            pagesPayload.message ||
+              campaignsPayload.message ||
+              "Could not load Supabase data.",
+          );
+        }
+
+        const nextPages = pagesPayload.pages ?? [];
+        setPages(nextPages);
+        setCampaigns(campaignsPayload.campaigns ?? []);
+        setSelectedId(nextPages[0]?.id ?? "");
+
+        if (nextPages.length === 0) {
+          setDataMessage(
+            "No TikTok pages found in Supabase yet. Add records to tiktok_pages to populate the marketplace.",
+          );
+        }
+      } catch (error) {
+        setDataMessage(
+          error instanceof Error
+            ? error.message
+            : "Could not connect to Supabase.",
+        );
+      } finally {
+        setLoadingData(false);
+      }
+    }
+
+    void loadData();
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tiktokStatus = params.get("tiktok_connect");
+    const message = params.get("message");
+    const connectedHandle = params.get("handle");
+
+    if (!tiktokStatus) {
+      return;
+    }
+
+    if (tiktokStatus === "success") {
+      setCreatorMessage(
+        message || `Connected ${connectedHandle || "@xeinstrentalsnyc"} successfully.`,
+      );
+      if (connectedHandle) {
+        setCreatorHandle(connectedHandle);
+      }
+    } else {
+      setCreatorMessage(message || "TikTok connection failed.");
+    }
+
+    params.delete("tiktok_connect");
+    params.delete("message");
+    params.delete("handle");
+    const query = params.toString();
+    const nextUrl = `${window.location.pathname}${query ? `?${query}` : ""}`;
+    window.history.replaceState({}, "", nextUrl);
+  }, []);
 
   const filteredPages = useMemo(() => {
     const normalized = query.toLowerCase().trim();
@@ -153,23 +254,51 @@ export function MarketplaceApp() {
       .sort((a, b) => b.engagementRate - a.engagementRate);
   }, [pages, query, savedOnly]);
 
-  const statusCounts = useMemo(() => {
-    return statusOrder.map((status) => ({
-      status,
-      count: campaigns.filter((campaign) => campaign.status === status).length,
-    }));
-  }, [campaigns]);
+  async function toggleSaved(pageId: string) {
+    const current = pages.find((page) => page.id === pageId);
+    if (!current) return;
 
-  function toggleSaved(pageId: string) {
-    setPages((current) =>
-      current.map((page) =>
-        page.id === pageId ? { ...page, saved: !page.saved } : page,
-      ),
-    );
+    try {
+      const response = await fetch("/api/pages", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: pageId,
+          saved: !current.saved,
+        }),
+      });
+      const payload = (await response.json()) as { page?: TikTokPage; message?: string };
+      if (!response.ok || !payload.page) {
+        throw new Error(payload.message || "Could not update saved state.");
+      }
+
+      setPages((items) =>
+        items.map((item) => (item.id === pageId ? payload.page! : item)),
+      );
+    } catch (error) {
+      setDataMessage(error instanceof Error ? error.message : "Could not update page.");
+    }
   }
 
   async function startCheckout() {
     if (!selectedPage) {
+      return;
+    }
+
+    if (!campaignTitle.trim()) {
+      setBookingError("Add a listing title before checkout.");
+      return;
+    }
+
+    if (!agentEmail.trim()) {
+      setBookingError("Agent email is required.");
+      return;
+    }
+
+    if (selectedPage.price <= 0) {
+      setBookingError(
+        "This creator has not set a post price yet. Ask the creator to set a price first.",
+      );
       return;
     }
 
@@ -182,11 +311,7 @@ export function MarketplaceApp() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           pageId: selectedPage.id,
-          handle: selectedPage.handle,
-          displayName: selectedPage.displayName,
-          price: selectedPage.price,
-          campaignTitle,
-          agentEmail,
+          campaignTitle: campaignTitle.trim(),
         }),
       });
 
@@ -206,14 +331,21 @@ export function MarketplaceApp() {
   }
 
   function markPaymentComplete(receiptId?: string) {
+    const nextReceipt = receiptId ?? checkout?.receiptId;
+    if (!nextReceipt) {
+      setBookingError("Finish Whop checkout before uploading the video.");
+      return;
+    }
+
     setCheckout((current) => ({
-      mode: current?.mode ?? "demo",
+      mode: current?.mode ?? "whop",
       planId: current?.planId,
       sessionId: current?.sessionId,
       purchaseUrl: current?.purchaseUrl,
-      receiptId: receiptId ?? current?.receiptId ?? `demo_${Date.now()}`,
+      receiptId: nextReceipt,
       message: "Payment confirmed. Upload the listing video.",
     }));
+    setBookingError("");
     setBookingStep("upload");
   }
 
@@ -221,31 +353,73 @@ export function MarketplaceApp() {
     const file = event.target.files?.[0];
     if (file) {
       setVideoName(file.name);
+      setVideoFile(file);
+    } else {
+      setVideoName("");
+      setVideoFile(null);
     }
   }
 
-  function sendCampaignToCreator() {
-    if (!selectedPage || !checkout) {
+  async function sendCampaignToCreator() {
+    if (!selectedPage || !checkout || !checkout.receiptId || !videoFile) {
+      setBookingError("Payment receipt and video upload are both required.");
       return;
     }
 
-    const nextCampaign: Campaign = {
-      id: String(1100 + campaigns.length + 1),
-      title: campaignTitle,
-      pageId: selectedPage.id,
-      creatorHandle: selectedPage.handle,
-      creatorName: selectedPage.displayName,
-      status: videoName ? "Creator Approval" : "Video Upload",
-      paymentStatus: "Paid",
-      paidAmount: selectedPage.price,
-      videoName: videoName || undefined,
-      videoDuration: videoName ? "0:30" : undefined,
-      receiptId: checkout.receiptId,
-    };
+    setBookingBusy(true);
+    setBookingError("");
 
-    setCampaigns((current) => [nextCampaign, ...current]);
-    setBookingStep("review");
-    setView("campaigns");
+    try {
+      const formData = new FormData();
+      formData.set("file", videoFile);
+      const uploadResponse = await fetch("/api/uploads/video", {
+        method: "POST",
+        body: formData,
+      });
+      const uploadPayload = (await uploadResponse.json()) as {
+        storagePath?: string;
+        fileName?: string;
+        fileSize?: number;
+        message?: string;
+      };
+
+      if (!uploadResponse.ok || !uploadPayload.storagePath || !uploadPayload.fileName) {
+        throw new Error(uploadPayload.message || "Could not upload listing video.");
+      }
+
+      const response = await fetch("/api/campaigns", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: campaignTitle.trim(),
+          pageId: selectedPage.id,
+          status: "Creator Approval",
+          paymentStatus: "Paid",
+          paidAmount: selectedPage.price,
+          videoName: uploadPayload.fileName,
+          videoStoragePath: uploadPayload.storagePath,
+          videoDuration: "0:30",
+          receiptId: checkout.receiptId,
+        }),
+      });
+      const payload = (await response.json()) as {
+        campaign?: Campaign;
+        message?: string;
+      };
+      if (!response.ok || !payload.campaign) {
+        throw new Error(payload.message || "Could not create campaign.");
+      }
+
+      setCampaigns((current) => [payload.campaign!, ...current]);
+      setBookingStep("review");
+      setView("campaigns");
+    } catch (error) {
+      setBookingError(
+        error instanceof Error ? error.message : "Could not create campaign.",
+      );
+    } finally {
+      setBookingBusy(false);
+    }
   }
 
   function closeBooking() {
@@ -253,39 +427,97 @@ export function MarketplaceApp() {
     setBookingStep("details");
     setCheckout(null);
     setVideoName("");
+    setVideoFile(null);
     setBookingError("");
   }
 
   function markPosted(campaignId: string) {
-    setCampaigns((current) =>
-      current.map((campaign) => {
-        if (campaign.id !== campaignId) {
-          return campaign;
+    void (async () => {
+      try {
+        const response = await fetch("/api/campaigns", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: campaignId,
+            status: "Posted",
+            postedOn: todayLabel(),
+          }),
+        });
+        const payload = (await response.json()) as {
+          campaign?: Campaign;
+          message?: string;
+        };
+        if (!response.ok || !payload.campaign) {
+          throw new Error(payload.message || "Could not mark campaign posted.");
         }
 
-        const page = pages.find((item) => item.id === campaign.pageId);
-        const baseViews = page?.avgViews ?? 68400;
-        return {
-          ...campaign,
-          status: "Posted",
-          postedOn: todayLabel(),
-          views: Math.round(baseViews * 0.82),
-          likes: Math.round(baseViews * 0.026),
-          comments: Math.round(baseViews * 0.001),
-          engagementRate: page?.engagementRate ?? 3.1,
-        };
-      }),
-    );
+        setCampaigns((current) =>
+          current.map((campaign) =>
+            campaign.id === campaignId ? payload.campaign! : campaign,
+          ),
+        );
+      } catch (error) {
+        setDataMessage(
+          error instanceof Error ? error.message : "Could not update campaign.",
+        );
+      }
+    })();
   }
 
   function releaseCampaign(campaignId: string) {
-    setCampaigns((current) =>
-      current.map((campaign) =>
-        campaign.id === campaignId
-          ? { ...campaign, status: "Completed", paymentStatus: "Released" }
-          : campaign,
-      ),
-    );
+    void (async () => {
+      try {
+        const response = await fetch("/api/campaigns", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: campaignId,
+            status: "Completed",
+            paymentStatus: "Released",
+          }),
+        });
+        const payload = (await response.json()) as {
+          campaign?: Campaign;
+          message?: string;
+        };
+        if (!response.ok || !payload.campaign) {
+          throw new Error(payload.message || "Could not release campaign.");
+        }
+
+        setCampaigns((current) =>
+          current.map((campaign) =>
+            campaign.id === campaignId ? payload.campaign! : campaign,
+          ),
+        );
+      } catch (error) {
+        setDataMessage(
+          error instanceof Error ? error.message : "Could not update campaign.",
+        );
+      }
+    })();
+  }
+
+  async function openCampaignVideo(campaign: Campaign) {
+    if (!campaign.videoStoragePath) {
+      setDataMessage("No video is attached to this campaign yet.");
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `/api/uploads/video-url?path=${encodeURIComponent(campaign.videoStoragePath)}`,
+      );
+      const payload = (await response.json()) as { url?: string; message?: string };
+      if (!response.ok || !payload.url) {
+        throw new Error(payload.message || "Could not open campaign video.");
+      }
+
+      window.open(payload.url, "_blank", "noopener,noreferrer");
+    } catch (error) {
+      setDataMessage(
+        error instanceof Error ? error.message : "Could not open campaign video.",
+      );
+    }
   }
 
   async function pullCreatorMetrics() {
@@ -301,24 +533,46 @@ export function MarketplaceApp() {
           price: Number(creatorPrice),
         }),
       });
-      const data = (await response.json()) as { page: TikTokPage; note: string };
+      const data = (await response.json()) as {
+        page?: TikTokPage;
+        note?: string;
+        message?: string;
+        connectPath?: string;
+      };
+
+      if (response.status === 412 && data.connectPath) {
+        setCreatorMessage(data.message || "Connect TikTok first...");
+        window.location.assign(data.connectPath);
+        return;
+      }
+
+      if (!response.ok || !data.page) {
+        throw new Error(data.message || "Could not import creator metrics.");
+      }
 
       setPages((current) => {
-        const withoutDuplicate = current.filter((page) => page.id !== data.page.id);
-        return [data.page, ...withoutDuplicate];
+        const withoutDuplicate = current.filter((page) => page.id !== data.page!.id);
+        return [data.page!, ...withoutDuplicate];
       });
       setSelectedId(data.page.id);
-      setCreatorMessage(data.note);
+      setCreatorMessage(data.note ?? "Creator imported.");
       setView("marketplace");
-    } catch {
-      setCreatorMessage("Could not pull metrics. Try the handle again.");
+    } catch (error) {
+      setCreatorMessage(
+        error instanceof Error
+          ? error.message
+          : "Could not import creator metrics.",
+      );
     } finally {
       setCreatorBusy(false);
     }
   }
 
-  if (!selectedPage) {
-    return null;
+  function startTikTokConnect() {
+    const normalized = creatorHandle.trim() || "@xeinstrentalsnyc";
+    window.location.assign(
+      `/api/tiktok/connect/start?handle=${encodeURIComponent(normalized)}`,
+    );
   }
 
   return (
@@ -345,7 +599,6 @@ export function MarketplaceApp() {
               >
                 <Icon size={18} />
                 <span>{item.label}</span>
-                {"count" in item && item.count ? <em>{item.count}</em> : null}
               </button>
             );
           })}
@@ -358,7 +611,6 @@ export function MarketplaceApp() {
               <button key={item.label} type="button">
                 <Icon size={18} />
                 <span>{item.label}</span>
-                {item.count ? <em>{item.count}</em> : null}
               </button>
             );
           })}
@@ -367,16 +619,26 @@ export function MarketplaceApp() {
         <div className="agent-card">
           <div className="agent-photo" aria-hidden="true" />
           <div>
-            <strong>Urban Key Realty</strong>
-            <span>Agent account</span>
+            <strong>{user.email}</strong>
+            <span>Signed-in account</span>
           </div>
-          <ChevronDown size={16} />
+          <button
+            type="button"
+            className="secondary-cta"
+            onClick={() => {
+              void fetch("/api/auth/logout", { method: "POST" }).then(() => {
+                window.location.reload();
+              });
+            }}
+          >
+            Log out
+          </button>
         </div>
 
         <div className="wallet-panel">
-          <span>Wallet Balance</span>
-          <strong>$2,450.00</strong>
-          <button type="button">Add Funds</button>
+          <span>Payments</span>
+          <strong>Whop</strong>
+          <button type="button" onClick={() => setView("campaigns")}>View Campaigns</button>
         </div>
 
         <form
@@ -395,7 +657,7 @@ export function MarketplaceApp() {
             <input
               value={creatorHandle}
               onChange={(event) => setCreatorHandle(event.target.value)}
-              placeholder="@yourtiktokhandle"
+              placeholder="@xeinstrentalsnyc"
             />
           </label>
           <label>
@@ -417,6 +679,9 @@ export function MarketplaceApp() {
           </label>
           <button disabled={creatorBusy} type="submit">
             {creatorBusy ? "Pulling metrics..." : "Pull Metrics"}
+          </button>
+          <button className="secondary-cta" type="button" onClick={startTikTokConnect}>
+            Connect TikTok
           </button>
           {creatorMessage ? <p>{creatorMessage}</p> : null}
         </form>
@@ -449,11 +714,10 @@ export function MarketplaceApp() {
           <div className="account-actions">
             <button aria-label="Notifications" className="icon-button" type="button">
               <Bell size={18} />
-              <em>5</em>
             </button>
             <div className="user-pill">
-              <span>JS</span>
-              Jane Smith
+              <span>{getUserInitials(user.email)}</span>
+              {user.email}
               <ChevronDown size={14} />
             </div>
           </div>
@@ -475,6 +739,8 @@ export function MarketplaceApp() {
             </select>
           </label>
         </div>
+        {loadingData ? <p className="eyebrow">Loading Supabase data...</p> : null}
+        {!loadingData && dataMessage ? <p className="eyebrow">{dataMessage}</p> : null}
 
         {view === "marketplace" ? (
           <MarketplaceView
@@ -485,8 +751,12 @@ export function MarketplaceApp() {
             onOpenBooking={() => {
               setBookingOpen(true);
               setBookingStep("details");
+              if (!campaignTitle.trim() && selectedPage) {
+                setCampaignTitle(`${selectedPage.displayName} Listing`);
+              }
             }}
             campaigns={campaigns}
+            onOpenVideo={openCampaignVideo}
           />
         ) : null}
 
@@ -494,9 +764,9 @@ export function MarketplaceApp() {
           <CampaignsView
             campaigns={campaigns}
             pages={pages}
-            statusCounts={statusCounts}
             onMarkPosted={markPosted}
             onRelease={releaseCampaign}
+            onOpenVideo={openCampaignVideo}
           />
         ) : null}
 
@@ -505,6 +775,7 @@ export function MarketplaceApp() {
             campaigns={campaigns}
             onMarkPosted={markPosted}
             onRelease={releaseCampaign}
+            onOpenVideo={openCampaignVideo}
           />
         ) : null}
       </section>
@@ -519,14 +790,14 @@ export function MarketplaceApp() {
           <X size={18} />
         </button>
 
-        <PageAvatar page={selectedPage} size="lg" />
+        {selectedPage ? <PageAvatar page={selectedPage} size="lg" /> : null}
         <div className="detail-title">
           <h2>
-            {selectedPage.handle}
-            {selectedPage.verified ? <ShieldCheck size={18} /> : null}
+            {selectedPage?.handle ?? "@connect_creator"}
+            {selectedPage?.verified ? <ShieldCheck size={18} /> : null}
           </h2>
-          <p>{selectedPage.displayName}</p>
-          {selectedPage.topPerformer ? (
+          <p>{selectedPage?.displayName ?? "Connect a creator from Supabase"}</p>
+          {selectedPage?.topPerformer ? (
             <span className="performer">
               <Sparkles size={15} />
               Top Performer
@@ -535,16 +806,16 @@ export function MarketplaceApp() {
         </div>
 
         <div className="tag-row">
-          <span>{selectedPage.niche}</span>
-          <span>{selectedPage.market}</span>
+          <span>{selectedPage?.niche ?? "No niche yet"}</span>
+          <span>{selectedPage?.market ?? "New York, NY"}</span>
         </div>
 
         <div className="metrics-grid">
-          <Metric label="Followers" value={compactNumber(selectedPage.followers)} />
-          <Metric label="Avg. Views" value={compactNumber(selectedPage.avgViews)} />
-          <Metric label="Eng. Rate" value={percent(selectedPage.engagementRate)} />
-          <Metric label="Avg. Likes" value={compactNumber(selectedPage.avgLikes)} />
-          <Metric label="Avg. Comments" value={compactNumber(selectedPage.avgComments)} />
+          <Metric label="Followers" value={compactNumber(selectedPage?.followers ?? 0)} />
+          <Metric label="Avg. Views" value={compactNumber(selectedPage?.avgViews ?? 0)} />
+          <Metric label="Eng. Rate" value={percent(selectedPage?.engagementRate ?? 0)} />
+          <Metric label="Avg. Likes" value={compactNumber(selectedPage?.avgLikes ?? 0)} />
+          <Metric label="Avg. Comments" value={compactNumber(selectedPage?.avgComments ?? 0)} />
         </div>
 
         <div className="chart-panel">
@@ -553,8 +824,8 @@ export function MarketplaceApp() {
             <span>Last 30 days</span>
           </div>
           <svg viewBox="0 0 316 150" role="img" aria-label="Engagement trend">
-            <path className="chart-area" d={`${buildPath(selectedPage.weeklyViews)} L 316 150 L 0 150 Z`} />
-            <path className="chart-line" d={buildPath(selectedPage.weeklyViews)} />
+            <path className="chart-area" d={`${buildPath(selectedPage?.weeklyViews?.length ? selectedPage.weeklyViews : [0, 0, 0, 0])} L 316 150 L 0 150 Z`} />
+            <path className="chart-line" d={buildPath(selectedPage?.weeklyViews?.length ? selectedPage.weeklyViews : [0, 0, 0, 0])} />
           </svg>
           <div className="chart-axis">
             <span>Apr 1</span>
@@ -566,23 +837,34 @@ export function MarketplaceApp() {
         <div className="pricing-block">
           <div>
             <span>Post Price</span>
-            <strong>{currency(selectedPage.price)}</strong>
+            <strong>{currency(selectedPage?.price ?? 0)}</strong>
           </div>
           <div>
             <span>Typical Delivery</span>
-            <strong>{selectedPage.deliveryDays}-{selectedPage.deliveryDays + 1} days</strong>
+            <strong>{selectedPage ? `${selectedPage.deliveryDays}-${selectedPage.deliveryDays + 1} days` : "—"}</strong>
           </div>
         </div>
 
-        {!bookingOpen ? (
+        {!bookingOpen || !selectedPage ? (
           <div className="detail-actions">
-            <button className="primary-cta" onClick={() => setBookingOpen(true)} type="button">
+            <button
+              className="primary-cta"
+              onClick={() => {
+                setBookingOpen(true);
+                setBookingStep("details");
+                if (!campaignTitle.trim() && selectedPage) {
+                  setCampaignTitle(`${selectedPage.displayName} Listing`);
+                }
+              }}
+              type="button"
+              disabled={!selectedPage}
+            >
               <CircleDollarSign size={18} />
               Book This Page
             </button>
-            <button className="secondary-cta" onClick={() => toggleSaved(selectedPage.id)} type="button">
-              {selectedPage.saved ? <BookmarkCheck size={18} /> : <Bookmark size={18} />}
-              {selectedPage.saved ? "Saved" : "Save for Later"}
+            <button className="secondary-cta" onClick={() => selectedPage && void toggleSaved(selectedPage.id)} type="button" disabled={!selectedPage}>
+              {selectedPage?.saved ? <BookmarkCheck size={18} /> : <Bookmark size={18} />}
+              {selectedPage?.saved ? "Saved" : "Save for Later"}
             </button>
             <button className="text-cta" type="button">
               <MessageCircle size={17} />
@@ -603,7 +885,6 @@ export function MarketplaceApp() {
             onCampaignTitleChange={setCampaignTitle}
             onCheckout={startCheckout}
             onClose={closeBooking}
-            onDemoPayment={() => markPaymentComplete()}
             onLivePayment={markPaymentComplete}
             onSendCampaign={sendCampaignToCreator}
             onVideoChange={handleVideoChange}
@@ -612,7 +893,7 @@ export function MarketplaceApp() {
 
         <div className="compliance">
           <strong>Compliance & Requirements</strong>
-          {selectedPage.contentNotes.map((note) => (
+          {(selectedPage?.contentNotes ?? ["Connect Supabase pages to load creator requirements."]).map((note) => (
             <span key={note}>
               <CheckCircle2 size={16} />
               {note}
@@ -632,13 +913,15 @@ function MarketplaceView({
   onSelectPage,
   onToggleSaved,
   onOpenBooking,
+  onOpenVideo,
 }: {
   filteredPages: TikTokPage[];
-  selectedPage: TikTokPage;
+  selectedPage: TikTokPage | null;
   campaigns: Campaign[];
   onSelectPage: (id: string) => void;
   onToggleSaved: (id: string) => void;
   onOpenBooking: () => void;
+  onOpenVideo: (campaign: Campaign) => void;
 }) {
   return (
     <div className="market-layout">
@@ -658,7 +941,7 @@ function MarketplaceView({
         <div className="table-body">
           {filteredPages.map((page) => (
             <article
-              className={page.id === selectedPage.id ? "creator-row selected" : "creator-row"}
+              className={page.id === selectedPage?.id ? "creator-row selected" : "creator-row"}
               key={page.id}
               onClick={() => onSelectPage(page.id)}
               onKeyDown={(event) => {
@@ -701,14 +984,20 @@ function MarketplaceView({
             </article>
           ))}
         </div>
-        <footer className="table-footer">
-          <span>Showing 1-{filteredPages.length} of {filteredPages.length + 30} results</span>
-          <div>
-            <button type="button">1</button>
-            <button type="button">2</button>
-            <button type="button">3</button>
-          </div>
-        </footer>
+        {filteredPages.length === 0 ? (
+          <footer className="table-footer">
+            <span>No creator pages in Supabase yet.</span>
+            <div />
+          </footer>
+        ) : null}
+        {filteredPages.length > 0 ? (
+          <footer className="table-footer">
+            <span>Showing 1-{filteredPages.length} of {filteredPages.length} results</span>
+            <div>
+              <button type="button">1</button>
+            </div>
+          </footer>
+        ) : null}
       </section>
 
       <section className="campaign-preview">
@@ -728,6 +1017,7 @@ function MarketplaceView({
           compact
           onMarkPosted={() => undefined}
           onRelease={() => undefined}
+          onOpenVideo={onOpenVideo}
         />
       </section>
     </div>
@@ -737,15 +1027,15 @@ function MarketplaceView({
 function CampaignsView({
   campaigns,
   pages,
-  statusCounts,
   onMarkPosted,
   onRelease,
+  onOpenVideo,
 }: {
   campaigns: Campaign[];
   pages: TikTokPage[];
-  statusCounts: { status: CampaignStatus; count: number }[];
   onMarkPosted: (campaignId: string) => void;
   onRelease: (campaignId: string) => void;
+  onOpenVideo: (campaign: Campaign) => void;
 }) {
   const totalViews = campaigns.reduce((total, campaign) => total + (campaign.views ?? 0), 0);
   const totalSpend = campaigns.reduce((total, campaign) => total + campaign.paidAmount, 0);
@@ -774,11 +1064,18 @@ function CampaignsView({
         <Metric label="Avg. Engagement" value={percent(Number.isFinite(averageEngagement) ? averageEngagement : 0)} />
       </div>
       <CampaignPipeline campaigns={campaigns} />
-      <CampaignTable campaigns={campaigns} onMarkPosted={onMarkPosted} onRelease={onRelease} />
+      <CampaignTable
+        campaigns={campaigns}
+        onMarkPosted={onMarkPosted}
+        onRelease={onRelease}
+        onOpenVideo={onOpenVideo}
+      />
       <div className="insight-strip">
         <Eye size={18} />
         <span>
-          Best current fit: {pages[0].handle} is pacing above average for luxury rental videos in New York.
+          {pages[0]
+            ? `Best current fit: ${pages[0].handle} is pacing above average for luxury rental videos in New York.`
+            : "Connect at least one TikTok page to start campaign recommendations."}
         </span>
       </div>
     </section>
@@ -789,10 +1086,12 @@ function CreatorQueueView({
   campaigns,
   onMarkPosted,
   onRelease,
+  onOpenVideo,
 }: {
   campaigns: Campaign[];
   onMarkPosted: (campaignId: string) => void;
   onRelease: (campaignId: string) => void;
+  onOpenVideo: (campaign: Campaign) => void;
 }) {
   const queued = campaigns.filter((campaign) =>
     ["Creator Approval", "Posted"].includes(campaign.status),
@@ -824,6 +1123,12 @@ function CreatorQueueView({
             </div>
             <StatusBadge status={campaign.status} />
             <div className="queue-actions">
+              {campaign.videoStoragePath ? (
+                <button onClick={() => onOpenVideo(campaign)} type="button">
+                  <FileVideo size={16} />
+                  View Video
+                </button>
+              ) : null}
               {campaign.status === "Creator Approval" ? (
                 <button onClick={() => onMarkPosted(campaign.id)} type="button">
                   <Send size={16} />
@@ -875,11 +1180,13 @@ function CampaignTable({
   compact,
   onMarkPosted,
   onRelease,
+  onOpenVideo,
 }: {
   campaigns: Campaign[];
   compact?: boolean;
   onMarkPosted: (campaignId: string) => void;
   onRelease: (campaignId: string) => void;
+  onOpenVideo: (campaign: Campaign) => void;
 }) {
   return (
     <div className={compact ? "campaign-table compact" : "campaign-table"}>
@@ -910,10 +1217,15 @@ function CampaignTable({
           </span>
           <span>
             {campaign.videoName ? (
-              <span className="video-chip">
+              <button
+                className="video-chip"
+                type="button"
+                onClick={() => onOpenVideo(campaign)}
+                disabled={!campaign.videoStoragePath}
+              >
                 <FileVideo size={16} />
                 {campaign.videoDuration ?? "0:30"}
-              </span>
+              </button>
             ) : (
               "—"
             )}
@@ -953,7 +1265,6 @@ function BookingPanel({
   onCampaignTitleChange,
   onCheckout,
   onClose,
-  onDemoPayment,
   onLivePayment,
   onSendCampaign,
   onVideoChange,
@@ -964,17 +1275,29 @@ function BookingPanel({
   bookingStep: BookingStep;
   campaignTitle: string;
   checkout: CheckoutResponse | null;
-  page: TikTokPage;
+  page: TikTokPage | null;
   videoName: string;
   onAgentEmailChange: (value: string) => void;
   onCampaignTitleChange: (value: string) => void;
   onCheckout: () => void;
   onClose: () => void;
-  onDemoPayment: () => void;
   onLivePayment: (receiptId: string) => void;
-  onSendCampaign: () => void;
+  onSendCampaign: () => void | Promise<void>;
   onVideoChange: (event: ChangeEvent<HTMLInputElement>) => void;
 }) {
+  const [manualReceiptId, setManualReceiptId] = useState("");
+
+  if (!page) {
+    return (
+      <div className="booking-panel">
+        <div className="booking-head">
+          <strong>Book sponsored post</strong>
+        </div>
+        <p className="error-text">Select a creator page from Supabase before starting checkout.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="booking-panel">
       <div className="booking-head">
@@ -996,11 +1319,19 @@ function BookingPanel({
         <div className="booking-form">
           <label>
             Listing title
-            <input value={campaignTitle} onChange={(event) => onCampaignTitleChange(event.target.value)} />
+            <input
+              value={campaignTitle}
+              onChange={(event) => onCampaignTitleChange(event.target.value)}
+              placeholder="Chelsea 1BR Walkthrough"
+            />
           </label>
           <label>
             Agent email
-            <input value={agentEmail} onChange={(event) => onAgentEmailChange(event.target.value)} />
+            <input
+              type="email"
+              value={agentEmail}
+              onChange={(event) => onAgentEmailChange(event.target.value)}
+            />
           </label>
           <div className="booking-summary">
             <span>Creator</span>
@@ -1020,29 +1351,45 @@ function BookingPanel({
 
       {bookingStep === "checkout" ? (
         <div className="checkout-step">
-          {checkout?.mode === "whop" && checkout.planId ? (
+          {checkout?.mode === "whop" ? (
             <>
-              <WhopCheckout
-                planId={checkout.planId}
-                sessionId={checkout.sessionId}
-                onComplete={onLivePayment}
-              />
+              {checkout.planId ? (
+                <WhopCheckout
+                  planId={checkout.planId}
+                  sessionId={checkout.sessionId}
+                  onComplete={onLivePayment}
+                />
+              ) : null}
               {checkout.purchaseUrl ? (
                 <a href={checkout.purchaseUrl} rel="noreferrer" target="_blank">
                   Open hosted Whop checkout
                 </a>
               ) : null}
+              <label>
+                Whop receipt ID
+                <input
+                  placeholder="receipt_..."
+                  value={manualReceiptId}
+                  onChange={(event) => setManualReceiptId(event.target.value)}
+                />
+              </label>
+              <button
+                className="secondary-cta"
+                type="button"
+                onClick={() => onLivePayment(manualReceiptId.trim())}
+                disabled={!manualReceiptId.trim()}
+              >
+                I Completed Payment
+              </button>
             </>
           ) : (
             <div className="demo-checkout">
               <CircleDollarSign size={22} />
-              <strong>Whop demo checkout</strong>
-              <p>{checkout?.message}</p>
-              <button className="primary-cta" onClick={onDemoPayment} type="button">
-                Simulate paid through Whop
-              </button>
+              <strong>Whop checkout unavailable</strong>
+              <p>{checkout?.message || "Create a checkout session to continue."}</p>
             </div>
           )}
+          {bookingError ? <p className="error-text">{bookingError}</p> : null}
         </div>
       ) : null}
 
@@ -1054,9 +1401,15 @@ function BookingPanel({
             <span>MP4, MOV, or WebM. Creator receives this after payment.</span>
             <input accept="video/mp4,video/quicktime,video/webm" onChange={onVideoChange} type="file" />
           </label>
-          <button className="primary-cta" disabled={!videoName} onClick={onSendCampaign} type="button">
+          {bookingError ? <p className="error-text">{bookingError}</p> : null}
+          <button
+            className="primary-cta"
+            disabled={!videoName || bookingBusy}
+            onClick={onSendCampaign}
+            type="button"
+          >
             <Send size={18} />
-            Send to Creator
+            {bookingBusy ? "Sending..." : "Send to Creator"}
           </button>
         </div>
       ) : null}
