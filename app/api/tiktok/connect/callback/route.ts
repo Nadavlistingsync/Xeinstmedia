@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { enforceCreatorAccountLimit } from "@/lib/creator-accounts";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 import {
   exchangeTikTokCodeForToken,
@@ -71,6 +72,7 @@ export async function GET(request: Request) {
     const token = await exchangeTikTokCodeForToken(code);
     const metrics = await loadTikTokAccountMetrics(token.accessToken);
     const pageHandle = normalizeHandle(metrics.handle || requestedHandle);
+    await enforceCreatorAccountLimit(auth.session.user.id, pageHandle, token.openId);
 
     const supabase = getSupabaseServerClient();
     const now = new Date();

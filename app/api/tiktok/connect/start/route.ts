@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { enforceCreatorAccountLimit } from "@/lib/creator-accounts";
 import { createTikTokAuthorizeUrl, normalizeHandle } from "@/lib/tiktok";
 import { requireApiSession } from "@/lib/route-auth";
 
@@ -13,6 +14,7 @@ export async function GET(request: Request) {
 
     const url = new URL(request.url);
     const handle = normalizeHandle(url.searchParams.get("handle") || "@xeinstrentalsnyc");
+    await enforceCreatorAccountLimit(auth.session.user.id, handle);
 
     const nonce = crypto.randomUUID();
     const statePayload = `${auth.session.user.id}:${handle}:${nonce}`;

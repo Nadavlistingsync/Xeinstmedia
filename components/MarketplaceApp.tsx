@@ -35,6 +35,7 @@ import {
 } from "lucide-react";
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import { compactNumber, currency, percent, todayLabel } from "@/lib/format";
+import { MAX_CREATOR_ACCOUNTS } from "@/lib/limits";
 import type { Campaign, CampaignStatus, CheckoutResponse, TikTokPage } from "@/lib/types";
 
 const WhopCheckout = dynamic(
@@ -123,7 +124,6 @@ type MarketplaceAppProps = {
 };
 
 export function MarketplaceApp({ user }: MarketplaceAppProps) {
-  const [view, setView] = useState<AppView>("marketplace");
   const [pages, setPages] = useState<TikTokPage[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [query, setQuery] = useState("");
@@ -253,6 +253,11 @@ export function MarketplaceApp({ user }: MarketplaceAppProps) {
       })
       .sort((a, b) => b.engagementRate - a.engagementRate);
   }, [pages, query, savedOnly]);
+
+  const totalSpend = useMemo(
+    () => campaigns.reduce((total, campaign) => total + campaign.paidAmount, 0),
+    [campaigns],
+  );
 
   async function toggleSaved(pageId: string) {
     const current = pages.find((page) => page.id === pageId);
@@ -412,7 +417,6 @@ export function MarketplaceApp({ user }: MarketplaceAppProps) {
 
       setCampaigns((current) => [payload.campaign!, ...current]);
       setBookingStep("review");
-      setView("campaigns");
     } catch (error) {
       setBookingError(
         error instanceof Error ? error.message : "Could not create campaign.",
@@ -556,7 +560,6 @@ export function MarketplaceApp({ user }: MarketplaceAppProps) {
       });
       setSelectedId(data.page.id);
       setCreatorMessage(data.note ?? "Creator imported.");
-      setView("marketplace");
     } catch (error) {
       setCreatorMessage(
         error instanceof Error
@@ -576,45 +579,23 @@ export function MarketplaceApp({ user }: MarketplaceAppProps) {
   }
 
   return (
-    <main className="app-shell">
+    <main className="app-shell campaign-only-shell">
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-mark">RT</div>
           <div>
             <strong>RentTok</strong>
-            <span>Marketplace</span>
+            <span>Agent Dashboard</span>
           </div>
         </div>
 
-        <nav className="primary-nav" aria-label="Primary">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const active = view === item.id;
-            return (
-              <button
-                className={active ? "active" : ""}
-                key={item.id}
-                onClick={() => setView(item.id)}
-                type="button"
-              >
-                <Icon size={18} />
-                <span>{item.label}</span>
-              </button>
-            );
-          })}
-        </nav>
-
-        <nav className="secondary-nav" aria-label="Secondary">
-          {secondaryNav.map((item) => {
-            const Icon = item.icon;
-            return (
-              <button key={item.label} type="button">
-                <Icon size={18} />
-                <span>{item.label}</span>
-              </button>
-            );
-          })}
-        </nav>
+        <div className="wallet-panel">
+          <span>Total Campaign Spend</span>
+          <strong>{currency(totalSpend)}</strong>
+          <button type="button" onClick={() => setBookingOpen(true)}>
+            New Campaign
+          </button>
+        </div>
 
         <div className="agent-card">
           <div className="agent-photo" aria-hidden="true" />
@@ -635,12 +616,6 @@ export function MarketplaceApp({ user }: MarketplaceAppProps) {
           </button>
         </div>
 
-        <div className="wallet-panel">
-          <span>Payments</span>
-          <strong>Whop</strong>
-          <button type="button" onClick={() => setView("campaigns")}>View Campaigns</button>
-        </div>
-
         <form
           className="creator-onboard"
           onSubmit={(event) => {
@@ -652,6 +627,9 @@ export function MarketplaceApp({ user }: MarketplaceAppProps) {
             <strong>Onboard TikTok Page</strong>
             <Sparkles size={16} />
           </div>
+          <p className="form-note">
+            Up to {MAX_CREATOR_ACCOUNTS} creator accounts for now.
+          </p>
           <label>
             TikTok Handle
             <input
@@ -689,219 +667,94 @@ export function MarketplaceApp({ user }: MarketplaceAppProps) {
 
       <section className="workspace">
         <header className="topbar">
-          <div className="search-box">
-            <Search size={18} />
-            <input
-              aria-label="Search TikTok pages"
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Search by handle, market, or niche"
-            />
+          <div>
+            <p className="eyebrow">Agent Workspace</p>
+            <h1>My Campaigns Dashboard</h1>
           </div>
-          <button className="filter-button" type="button">
-            <Filter size={17} />
-            Filters
-            <em>2</em>
-          </button>
-          <button
-            className={savedOnly ? "filter-button active-filter" : "filter-button"}
-            onClick={() => setSavedOnly((current) => !current)}
-            type="button"
-          >
-            <BookmarkCheck size={17} />
-            Saved
-          </button>
           <div className="account-actions">
-            <button aria-label="Notifications" className="icon-button" type="button">
-              <Bell size={18} />
-            </button>
             <div className="user-pill">
               <span>{getUserInitials(user.email)}</span>
               {user.email}
-              <ChevronDown size={14} />
             </div>
           </div>
         </header>
 
-        <div className="filter-strip">
-          <span>Location: New York, NY <X size={14} /></span>
-          <span>Followers: 10K - 500K <X size={14} /></span>
-          <span>Niche: Rentals <X size={14} /></span>
-          <span>Engagement: 2%+ <X size={14} /></span>
-          <button type="button">Clear all</button>
-          <label>
-            Sort by
-            <select defaultValue="Recommended">
-              <option>Recommended</option>
-              <option>Highest engagement</option>
-              <option>Lowest price</option>
-              <option>Fastest delivery</option>
-            </select>
-          </label>
-        </div>
         {loadingData ? <p className="eyebrow">Loading Supabase data...</p> : null}
         {!loadingData && dataMessage ? <p className="eyebrow">{dataMessage}</p> : null}
 
-        {view === "marketplace" ? (
-          <MarketplaceView
-            filteredPages={filteredPages}
-            selectedPage={selectedPage}
-            onSelectPage={(id) => setSelectedId(id)}
-            onToggleSaved={toggleSaved}
-            onOpenBooking={() => {
-              setBookingOpen(true);
-              setBookingStep("details");
-              if (!campaignTitle.trim() && selectedPage) {
-                setCampaignTitle(`${selectedPage.displayName} Listing`);
-              }
-            }}
-            campaigns={campaigns}
-            onOpenVideo={openCampaignVideo}
-          />
-        ) : null}
+        <section className="full-panel">
+          <div className="section-title">
+            <div>
+              <p className="eyebrow">Booking</p>
+              <h1>New Campaign</h1>
+            </div>
+            {!bookingOpen ? (
+              <button
+                onClick={() => {
+                  setBookingOpen(true);
+                  setBookingStep("details");
+                  if (!campaignTitle.trim() && selectedPage) {
+                    setCampaignTitle(`${selectedPage.displayName} Listing`);
+                  }
+                }}
+                type="button"
+              >
+                <Plus size={17} />
+                Start Booking
+              </button>
+            ) : null}
+          </div>
 
-        {view === "campaigns" ? (
-          <CampaignsView
-            campaigns={campaigns}
-            pages={pages}
-            onMarkPosted={markPosted}
-            onRelease={releaseCampaign}
-            onOpenVideo={openCampaignVideo}
-          />
-        ) : null}
+          {!bookingOpen ? (
+            <p className="eyebrow">
+              Start a booking to pay through Whop, upload a listing video, and send it to a creator.
+            </p>
+          ) : (
+            <>
+              <div className="booking-form">
+                <label>
+                  Creator page
+                  <select
+                    value={selectedId}
+                    onChange={(event) => setSelectedId(event.target.value)}
+                  >
+                    {filteredPages.map((page) => (
+                      <option key={page.id} value={page.id}>
+                        {page.handle} · {currency(page.price)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <BookingPanel
+                agentEmail={agentEmail}
+                bookingBusy={bookingBusy}
+                bookingError={bookingError}
+                bookingStep={bookingStep}
+                campaignTitle={campaignTitle}
+                checkout={checkout}
+                page={selectedPage}
+                videoName={videoName}
+                onAgentEmailChange={setAgentEmail}
+                onCampaignTitleChange={setCampaignTitle}
+                onCheckout={startCheckout}
+                onClose={closeBooking}
+                onLivePayment={markPaymentComplete}
+                onSendCampaign={sendCampaignToCreator}
+                onVideoChange={handleVideoChange}
+              />
+            </>
+          )}
+        </section>
 
-        {view === "creator" ? (
-          <CreatorQueueView
-            campaigns={campaigns}
-            onMarkPosted={markPosted}
-            onRelease={releaseCampaign}
-            onOpenVideo={openCampaignVideo}
-          />
-        ) : null}
+        <CampaignsView
+          campaigns={campaigns}
+          pages={pages}
+          onMarkPosted={markPosted}
+          onRelease={releaseCampaign}
+          onOpenVideo={openCampaignVideo}
+        />
       </section>
-
-      <aside className="detail-panel">
-        <button
-          aria-label="Close selected page"
-          className="close-detail"
-          onClick={() => setBookingOpen(false)}
-          type="button"
-        >
-          <X size={18} />
-        </button>
-
-        {selectedPage ? <PageAvatar page={selectedPage} size="lg" /> : null}
-        <div className="detail-title">
-          <h2>
-            {selectedPage?.handle ?? "@connect_creator"}
-            {selectedPage?.verified ? <ShieldCheck size={18} /> : null}
-          </h2>
-          <p>{selectedPage?.displayName ?? "Connect a creator from Supabase"}</p>
-          {selectedPage?.topPerformer ? (
-            <span className="performer">
-              <Sparkles size={15} />
-              Top Performer
-            </span>
-          ) : null}
-        </div>
-
-        <div className="tag-row">
-          <span>{selectedPage?.niche ?? "No niche yet"}</span>
-          <span>{selectedPage?.market ?? "New York, NY"}</span>
-        </div>
-
-        <div className="metrics-grid">
-          <Metric label="Followers" value={compactNumber(selectedPage?.followers ?? 0)} />
-          <Metric label="Avg. Views" value={compactNumber(selectedPage?.avgViews ?? 0)} />
-          <Metric label="Eng. Rate" value={percent(selectedPage?.engagementRate ?? 0)} />
-          <Metric label="Avg. Likes" value={compactNumber(selectedPage?.avgLikes ?? 0)} />
-          <Metric label="Avg. Comments" value={compactNumber(selectedPage?.avgComments ?? 0)} />
-        </div>
-
-        <div className="chart-panel">
-          <div>
-            <strong>Engagement Overview</strong>
-            <span>Last 30 days</span>
-          </div>
-          <svg viewBox="0 0 316 150" role="img" aria-label="Engagement trend">
-            <path className="chart-area" d={`${buildPath(selectedPage?.weeklyViews?.length ? selectedPage.weeklyViews : [0, 0, 0, 0])} L 316 150 L 0 150 Z`} />
-            <path className="chart-line" d={buildPath(selectedPage?.weeklyViews?.length ? selectedPage.weeklyViews : [0, 0, 0, 0])} />
-          </svg>
-          <div className="chart-axis">
-            <span>Apr 1</span>
-            <span>Apr 14</span>
-            <span>Apr 27</span>
-          </div>
-        </div>
-
-        <div className="pricing-block">
-          <div>
-            <span>Post Price</span>
-            <strong>{currency(selectedPage?.price ?? 0)}</strong>
-          </div>
-          <div>
-            <span>Typical Delivery</span>
-            <strong>{selectedPage ? `${selectedPage.deliveryDays}-${selectedPage.deliveryDays + 1} days` : "—"}</strong>
-          </div>
-        </div>
-
-        {!bookingOpen || !selectedPage ? (
-          <div className="detail-actions">
-            <button
-              className="primary-cta"
-              onClick={() => {
-                setBookingOpen(true);
-                setBookingStep("details");
-                if (!campaignTitle.trim() && selectedPage) {
-                  setCampaignTitle(`${selectedPage.displayName} Listing`);
-                }
-              }}
-              type="button"
-              disabled={!selectedPage}
-            >
-              <CircleDollarSign size={18} />
-              Book This Page
-            </button>
-            <button className="secondary-cta" onClick={() => selectedPage && void toggleSaved(selectedPage.id)} type="button" disabled={!selectedPage}>
-              {selectedPage?.saved ? <BookmarkCheck size={18} /> : <Bookmark size={18} />}
-              {selectedPage?.saved ? "Saved" : "Save for Later"}
-            </button>
-            <button className="text-cta" type="button">
-              <MessageCircle size={17} />
-              Contact Creator
-            </button>
-          </div>
-        ) : (
-          <BookingPanel
-            agentEmail={agentEmail}
-            bookingBusy={bookingBusy}
-            bookingError={bookingError}
-            bookingStep={bookingStep}
-            campaignTitle={campaignTitle}
-            checkout={checkout}
-            page={selectedPage}
-            videoName={videoName}
-            onAgentEmailChange={setAgentEmail}
-            onCampaignTitleChange={setCampaignTitle}
-            onCheckout={startCheckout}
-            onClose={closeBooking}
-            onLivePayment={markPaymentComplete}
-            onSendCampaign={sendCampaignToCreator}
-            onVideoChange={handleVideoChange}
-          />
-        )}
-
-        <div className="compliance">
-          <strong>Compliance & Requirements</strong>
-          {(selectedPage?.contentNotes ?? ["Connect Supabase pages to load creator requirements."]).map((note) => (
-            <span key={note}>
-              <CheckCircle2 size={16} />
-              {note}
-            </span>
-          ))}
-          <button type="button">View full policy</button>
-        </div>
-      </aside>
     </main>
   );
 }

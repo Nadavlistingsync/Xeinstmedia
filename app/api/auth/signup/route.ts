@@ -1,39 +1,71 @@
 import { NextResponse } from "next/server";
 import {
-  createSessionFromSignup,
+  createSessionFromPassword,
   setAuthCookies,
 } from "@/lib/supabase-auth";
+import { getSupabaseServerClient } from "@/lib/supabase-server";
+
+function isAlreadyExistsMessage(message: string) {
+  const normalized = message.toLowerCase();
+  return (
+    normalized.includes("already") ||
+    normalized.includes("exists") ||
+    normalized.includes("registered") ||
+    normalized.includes("duplicate")
+  );
+}
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as { email?: string; password?: string };
-    if (!body.email || !body.password) {
+    const body = (await request.json()) as {
+      email?: string;
+      password?: string;
+      accountType?: "agent" | "creator" | string;
+    };
+    const email = body.email?.trim().toLowerCase();
+    const password = body.password;
+    const accountType = body.accountType === "creator" ? "creator" : "agent";
+
+    if (!email || !password) {
       return NextResponse.json(
         { message: "Email and password are required." },
         { status: 400 },
       );
     }
 
-    const session = await createSessionFromSignup(body.email, body.password);
-    if (!session.ok) {
+    const supabase = getSupabaseServerClient();
+    const createUser = await supabase.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: {
+        account_type: accountType,
+      },
+    });
+
+    if (createUser.error && !isAlreadyExistsMessage(createUser.error.message)) {
       return NextResponse.json(
-        { message: session.message || "Could not sign up." },
+        { message: createUser.error.message || "Could not sign up." },
         { status: 400 },
       );
     }
 
+    const session = await createSessionFromPassword(email, password);
     if (!session.tokens) {
       return NextResponse.json(
         {
-          message:
-            "Account created. Check your inbox to confirm email, then log in.",
+          message: "Could not log in after signup. Try logging in again.",
         },
-        { status: 202 },
+        { status: 401 },
       );
     }
 
     const response = NextResponse.json({
-      user: { id: session.user?.id ?? "", email: session.user?.email ?? body.email },
+      user: {
+        id: session.user?.id ?? "",
+        email: session.user?.email ?? email,
+        accountType,
+      },
     });
     setAuthCookies(response, session.tokens);
     return response;

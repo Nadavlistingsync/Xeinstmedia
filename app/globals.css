@@ -60,6 +60,10 @@ a:focus-visible,
     var(--bg);
 }
 
+.campaign-only-shell {
+  grid-template-columns: 240px minmax(0, 1fr);
+}
+
 .sidebar,
 .detail-panel {
   height: 100vh;
@@ -288,6 +292,65 @@ a:focus-visible,
   background: #fff;
   border: 1px solid var(--line-strong);
   border-radius: 7px;
+}
+
+.booking-form select {
+  width: 100%;
+  height: 36px;
+  padding: 0 10px;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+}
+
+.password-field {
+  position: relative;
+  display: block;
+}
+
+.password-field input {
+  padding-right: 40px;
+}
+
+.password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  color: #5f5a50;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  transform: translateY(-50%);
+}
+
+.password-toggle:hover {
+  background: var(--surface-2);
+}
+
+.auth-role-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.auth-role-toggle button {
+  min-height: 36px;
+  color: #3f3a31;
+  background: #fff;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  font-weight: 650;
+}
+
+.auth-role-toggle button.active {
+  color: #fff;
+  background: var(--emerald);
+  border-color: var(--emerald);
 }
 
 .creator-onboard button {
@@ -1423,6 +1486,10 @@ a:focus-visible,
     grid-template-columns: 220px minmax(580px, 1fr) 360px;
   }
 
+  .campaign-only-shell {
+    grid-template-columns: 220px minmax(0, 1fr);
+  }
+
   .metrics-grid {
     grid-template-columns: repeat(3, 1fr);
   }
@@ -1430,6 +1497,10 @@ a:focus-visible,
 
 @media (max-width: 1080px) {
   .app-shell {
+    grid-template-columns: 86px minmax(0, 1fr);
+  }
+
+  .campaign-only-shell {
     grid-template-columns: 86px minmax(0, 1fr);
   }
 

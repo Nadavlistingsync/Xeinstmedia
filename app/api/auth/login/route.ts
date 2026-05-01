@@ -7,14 +7,17 @@ import {
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as { email?: string; password?: string };
-    if (!body.email || !body.password) {
+    const email = body.email?.trim().toLowerCase();
+    const password = body.password;
+
+    if (!email || !password) {
       return NextResponse.json(
         { message: "Email and password are required." },
         { status: 400 },
       );
     }
 
-    const session = await createSessionFromPassword(body.email, body.password);
+    const session = await createSessionFromPassword(email, password);
     if (!session.ok || !session.tokens) {
       return NextResponse.json(
         { message: session.message || "Could not log in." },
@@ -22,9 +25,9 @@ export async function POST(request: Request) {
       );
     }
 
-    const email = session.user?.email ?? body.email;
+    const resolvedEmail = session.user?.email ?? email;
     const response = NextResponse.json({
-      user: { id: session.user?.id ?? "", email },
+      user: { id: session.user?.id ?? "", email: resolvedEmail },
     });
     setAuthCookies(response, session.tokens);
     return response;
