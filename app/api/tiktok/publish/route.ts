@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { requireApiSession, withRefreshedSessionCookies } from "@/lib/route-auth";
+import {
+  requireAccountType,
+  requireApiSession,
+  withRefreshedSessionCookies,
+} from "@/lib/route-auth";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 import { normalizeHandle, refreshTikTokToken } from "@/lib/tiktok";
 
@@ -27,6 +31,11 @@ export async function POST(request: Request) {
       return auth.response;
     }
 
+    const roleResponse = requireAccountType(auth.session.user, "creator");
+    if (roleResponse) {
+      return roleResponse;
+    }
+
     const body = (await request.json()) as PublishRequest;
 
     if (!body.campaignId || !body.caption || !body.videoFileName) {
@@ -52,12 +61,11 @@ export async function POST(request: Request) {
       .from("campaigns")
       .select("id,creator_handle")
       .eq("id", body.campaignId)
-      .eq("agent_user_id", auth.session.user.id)
       .single();
 
     if (campaignResult.error || !campaignResult.data) {
       return NextResponse.json(
-        { message: "Campaign not found for this account." },
+        { message: "Campaign not found for this creator account." },
         { status: 404 },
       );
     }
@@ -65,6 +73,26 @@ export async function POST(request: Request) {
     const creatorHandle = normalizeHandle(
       body.creatorHandle || campaignResult.data.creator_handle,
     );
+    const ownerResult = await supabase
+      .from("creator_tokens")
+      .select("handle")
+      .eq("user_id", auth.session.user.id)
+      .ilike("handle", creatorHandle)
+      .maybeSingle();
+
+    if (ownerResult.error) {
+      throw ownerResult.error;
+    }
+
+    if (!ownerResult.data) {
+      return NextResponse.json(
+        {
+          message: `This campaign is not assigned to ${creatorHandle} on your creator account.`,
+        },
+        { status: 403 },
+      );
+    }
+
     const tokenResult = await supabase
       .from("creator_tokens")
       .select("*")
@@ -167,8 +195,7 @@ export async function POST(request: Request) {
         tiktok_post_id: postId,
         publish_message: "TikTok publish initialized.",
       })
-      .eq("id", body.campaignId)
-      .eq("agent_user_id", auth.session.user.id);
+      .eq("id", body.campaignId);
 
     if (updateResult.error) {
       throw updateResult.error;

@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { getListingVideoBucket } from "@/lib/storage";
-import { requireApiSession, withRefreshedSessionCookies } from "@/lib/route-auth";
+import {
+  requireAccountType,
+  requireApiSession,
+  withRefreshedSessionCookies,
+} from "@/lib/route-auth";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 
 const MAX_VIDEO_BYTES = 200 * 1024 * 1024; // 200MB
@@ -23,6 +27,11 @@ export async function POST(request: Request) {
     const auth = await requireApiSession();
     if (auth.response) {
       return auth.response;
+    }
+
+    const roleResponse = requireAccountType(auth.session.user, "agent");
+    if (roleResponse) {
+      return roleResponse;
     }
 
     const formData = await request.formData();

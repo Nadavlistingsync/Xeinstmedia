@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { clearAuthCookies, setAuthCookies } from "@/lib/supabase-auth";
+import { clearAuthCookies, setAuthCookies, type SessionUser } from "@/lib/supabase-auth";
 import { requireSessionUser } from "@/lib/session";
 
 export async function requireApiSession() {
@@ -14,6 +14,20 @@ export async function requireApiSession() {
   }
 
   return { session };
+}
+
+export function requireAccountType(
+  user: SessionUser,
+  accountType: "agent" | "creator",
+) {
+  if (user.accountType === accountType) {
+    return null;
+  }
+
+  return NextResponse.json(
+    { message: `This action is only available to ${accountType} accounts.` },
+    { status: 403 },
+  );
 }
 
 export function withRefreshedSessionCookies(

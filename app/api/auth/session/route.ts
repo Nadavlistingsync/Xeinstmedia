@@ -10,7 +10,11 @@ export async function GET() {
     }
 
     const response = NextResponse.json({
-      user: { id: session.user.id, email: session.user.email },
+      user: {
+        id: session.user.id,
+        email: session.user.email,
+        accountType: session.user.accountType,
+      },
     });
     if (session.refreshedTokens) {
       setAuthCookies(response, session.refreshedTokens);

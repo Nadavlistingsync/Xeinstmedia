@@ -1,62 +1,23 @@
 import { NextResponse } from "next/server";
-import { requireApiSession, withRefreshedSessionCookies } from "@/lib/route-auth";
+import { mapCampaignRow, type CampaignRow } from "@/lib/campaign-mapper";
+import {
+  requireAccountType,
+  requireApiSession,
+  withRefreshedSessionCookies,
+} from "@/lib/route-auth";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 import type { CampaignStatus, PaymentStatus } from "@/lib/types";
-
-type CampaignRow = {
-  id: string;
-  title: string;
-  page_id: string;
-  agent_user_id: string;
-  agent_email: string | null;
-  creator_handle: string;
-  creator_name: string;
-  status: "Video Upload" | "Creator Approval" | "Posted" | "Completed";
-  payment_status: "Pending" | "Paid" | "Released";
-  paid_amount: number;
-  video_name: string | null;
-  video_storage_path: string | null;
-  video_duration: string | null;
-  posted_on: string | null;
-  views: number | null;
-  likes: number | null;
-  comments: number | null;
-  engagement_rate: number | null;
-  receipt_id: string | null;
-  tiktok_post_id: string | null;
-  publish_message: string | null;
-};
-
-function mapCampaign(row: CampaignRow) {
-  return {
-    id: row.id,
-    title: row.title,
-    pageId: row.page_id,
-    agentEmail: row.agent_email ?? undefined,
-    creatorHandle: row.creator_handle,
-    creatorName: row.creator_name,
-    status: row.status,
-    paymentStatus: row.payment_status,
-    paidAmount: row.paid_amount,
-    videoName: row.video_name ?? undefined,
-    videoStoragePath: row.video_storage_path ?? undefined,
-    videoDuration: row.video_duration ?? undefined,
-    postedOn: row.posted_on ?? undefined,
-    views: row.views ?? undefined,
-    likes: row.likes ?? undefined,
-    comments: row.comments ?? undefined,
-    engagementRate: row.engagement_rate ?? undefined,
-    receiptId: row.receipt_id ?? undefined,
-    tiktokPostId: row.tiktok_post_id ?? undefined,
-    publishMessage: row.publish_message ?? undefined,
-  };
-}
 
 export async function GET() {
   try {
     const auth = await requireApiSession();
     if (auth.response) {
       return auth.response;
+    }
+
+    const roleResponse = requireAccountType(auth.session.user, "agent");
+    if (roleResponse) {
+      return roleResponse;
     }
 
     const supabase = getSupabaseServerClient();
@@ -71,7 +32,7 @@ export async function GET() {
     }
 
     const response = NextResponse.json({
-      campaigns: (data as CampaignRow[]).map(mapCampaign),
+      campaigns: (data as CampaignRow[]).map(mapCampaignRow),
     });
     return withRefreshedSessionCookies(response, auth.session.refreshedTokens);
   } catch (error) {
@@ -92,6 +53,11 @@ export async function POST(request: Request) {
     const auth = await requireApiSession();
     if (auth.response) {
       return auth.response;
+    }
+
+    const roleResponse = requireAccountType(auth.session.user, "agent");
+    if (roleResponse) {
+      return roleResponse;
     }
 
     const body = (await request.json()) as Record<string, unknown>;
@@ -189,7 +155,7 @@ export async function POST(request: Request) {
       throw error;
     }
 
-    const response = NextResponse.json({ campaign: mapCampaign(data as CampaignRow) });
+    const response = NextResponse.json({ campaign: mapCampaignRow(data as CampaignRow) });
     return withRefreshedSessionCookies(response, auth.session.refreshedTokens);
   } catch (error) {
     return NextResponse.json(
@@ -209,6 +175,11 @@ export async function PATCH(request: Request) {
     const auth = await requireApiSession();
     if (auth.response) {
       return auth.response;
+    }
+
+    const roleResponse = requireAccountType(auth.session.user, "agent");
+    if (roleResponse) {
+      return roleResponse;
     }
 
     const body = (await request.json()) as Record<string, unknown>;
@@ -256,7 +227,7 @@ export async function PATCH(request: Request) {
       throw error;
     }
 
-    const response = NextResponse.json({ campaign: mapCampaign(data as CampaignRow) });
+    const response = NextResponse.json({ campaign: mapCampaignRow(data as CampaignRow) });
     return withRefreshedSessionCookies(response, auth.session.refreshedTokens);
   } catch (error) {
     return NextResponse.json(

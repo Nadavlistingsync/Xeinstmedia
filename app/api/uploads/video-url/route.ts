@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
+import { requireAccountType, requireApiSession, withRefreshedSessionCookies } from "@/lib/route-auth";
 import { getListingVideoBucket } from "@/lib/storage";
-import { requireApiSession, withRefreshedSessionCookies } from "@/lib/route-auth";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 
 export async function GET(request: Request) {
@@ -20,6 +20,52 @@ export async function GET(request: Request) {
     }
 
     const supabase = getSupabaseServerClient();
+    const campaignResult = await supabase
+      .from("campaigns")
+      .select("agent_user_id,creator_handle")
+      .eq("video_storage_path", path)
+      .maybeSingle();
+
+    if (campaignResult.error) {
+      throw campaignResult.error;
+    }
+
+    if (!campaignResult.data) {
+      return NextResponse.json(
+        { message: "Campaign video not found." },
+        { status: 404 },
+      );
+    }
+
+    let canAccess = false;
+    const agentOnly = requireAccountType(auth.session.user, "agent");
+    if (!agentOnly) {
+      canAccess = campaignResult.data.agent_user_id === auth.session.user.id;
+    } else {
+      const creatorAccess = requireAccountType(auth.session.user, "creator");
+      if (!creatorAccess) {
+        const creatorTokenResult = await supabase
+          .from("creator_tokens")
+          .select("handle")
+          .eq("user_id", auth.session.user.id)
+          .ilike("handle", campaignResult.data.creator_handle)
+          .maybeSingle();
+
+        if (creatorTokenResult.error) {
+          throw creatorTokenResult.error;
+        }
+
+        canAccess = Boolean(creatorTokenResult.data);
+      }
+    }
+
+    if (!canAccess) {
+      return NextResponse.json(
+        { message: "You do not have access to this campaign video." },
+        { status: 403 },
+      );
+    }
+
     const bucket = getListingVideoBucket();
     const signedResult = await supabase.storage
       .from(bucket)

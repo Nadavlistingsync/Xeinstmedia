@@ -1,13 +1,13 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { enforceCreatorAccountLimit } from "@/lib/creator-accounts";
+import { requireAccountType, requireApiSession } from "@/lib/route-auth";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 import {
   exchangeTikTokCodeForToken,
   loadTikTokAccountMetrics,
   normalizeHandle,
 } from "@/lib/tiktok";
-import { requireApiSession } from "@/lib/route-auth";
 
 const stateCookieName = "renttok_tiktok_oauth_state";
 
@@ -29,6 +29,14 @@ export async function GET(request: Request) {
     const auth = await requireApiSession();
     if (auth.response) {
       return redirectHome({ ok: false, message: "Please log in again and retry TikTok connect." });
+    }
+
+    const roleResponse = requireAccountType(auth.session.user, "creator");
+    if (roleResponse) {
+      return redirectHome({
+        ok: false,
+        message: "Only creator accounts can connect TikTok pages.",
+      });
     }
 
     const url = new URL(request.url);

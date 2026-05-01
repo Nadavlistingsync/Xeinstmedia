@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { requireApiSession, withRefreshedSessionCookies } from "@/lib/route-auth";
+import {
+  requireAccountType,
+  requireApiSession,
+  withRefreshedSessionCookies,
+} from "@/lib/route-auth";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 import { createWhopClient, whopIsConfigured } from "@/lib/whop";
 
@@ -13,6 +17,11 @@ export async function POST(request: Request) {
     const auth = await requireApiSession();
     if (auth.response) {
       return auth.response;
+    }
+
+    const roleResponse = requireAccountType(auth.session.user, "agent");
+    if (roleResponse) {
+      return roleResponse;
     }
 
     const body = (await request.json()) as Partial<CheckoutRequest>;

@@ -5,6 +5,12 @@ const ONE_WEEK = 60 * 60 * 24 * 7;
 type SupabaseAuthUser = {
   id?: string;
   email?: string;
+  app_metadata?: {
+    account_type?: string;
+  };
+  user_metadata?: {
+    account_type?: string;
+  };
 };
 
 type SupabaseAuthSessionResponse = {
@@ -19,6 +25,7 @@ type SupabaseAuthSessionResponse = {
 export type SessionUser = {
   id: string;
   email: string;
+  accountType: "agent" | "creator";
 };
 
 export type SessionTokens = {
@@ -30,6 +37,36 @@ export type SessionResolution = {
   user: SessionUser;
   refreshedTokens?: SessionTokens;
 };
+
+function resolveAccountType(
+  user?: Pick<SupabaseAuthUser, "app_metadata" | "user_metadata"> | null,
+) {
+  if (user?.app_metadata?.account_type === "creator") {
+    return "creator";
+  }
+
+  if (user?.app_metadata?.account_type === "agent") {
+    return "agent";
+  }
+
+  if (user?.user_metadata?.account_type === "creator") {
+    return "creator";
+  }
+
+  return "agent";
+}
+
+function normalizeSessionUser(user?: SupabaseAuthUser | null) {
+  if (!user?.id || !user.email) {
+    return null;
+  }
+
+  return {
+    id: user.id,
+    email: user.email,
+    accountType: resolveAccountType(user),
+  } satisfies SessionUser;
+}
 
 export function getSupabaseAuthConfig() {
   const url = process.env.SUPABASE_URL;
@@ -100,7 +137,7 @@ export async function fetchSupabaseUser(accessToken: string) {
     return null;
   }
 
-  return { id: payload.id, email: payload.email } satisfies SessionUser;
+  return normalizeSessionUser(payload);
 }
 
 function parseSessionTokens(payload: SupabaseAuthSessionResponse) {
@@ -134,7 +171,7 @@ export async function createSessionFromPassword(email: string, password: string)
   return {
     ok: response.ok,
     tokens: parseSessionTokens(payload),
-    user: payload.user,
+    user: normalizeSessionUser(payload.user),
     message: sessionError(payload, "Could not log in."),
   };
 }
@@ -155,7 +192,7 @@ export async function createSessionFromSignup(email: string, password: string) {
   return {
     ok: response.ok,
     tokens: parseSessionTokens(payload),
-    user: payload.user,
+    user: normalizeSessionUser(payload.user),
     message: sessionError(payload, "Could not sign up."),
   };
 }
@@ -183,10 +220,7 @@ export async function refreshSession(refreshToken: string) {
     return null;
   }
 
-  const user =
-    payload.user?.id && payload.user.email
-      ? ({ id: payload.user.id, email: payload.user.email } satisfies SessionUser)
-      : null;
+  const user = normalizeSessionUser(payload.user);
 
   return { tokens, user };
 }

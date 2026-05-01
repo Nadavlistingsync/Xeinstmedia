@@ -38,7 +38,7 @@ export async function POST(request: Request) {
       email,
       password,
       email_confirm: true,
-      user_metadata: {
+      app_metadata: {
         account_type: accountType,
       },
     });
@@ -64,7 +64,7 @@ export async function POST(request: Request) {
       user: {
         id: session.user?.id ?? "",
         email: session.user?.email ?? email,
-        accountType,
+        accountType: session.user?.accountType ?? accountType,
       },
     });
     setAuthCookies(response, session.tokens);

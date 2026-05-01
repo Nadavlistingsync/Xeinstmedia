@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { mapPageRow, type PageRow } from "@/lib/page-mapper";
-import { requireApiSession, withRefreshedSessionCookies } from "@/lib/route-auth";
+import {
+  requireAccountType,
+  requireApiSession,
+  withRefreshedSessionCookies,
+} from "@/lib/route-auth";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 
 export async function GET() {
@@ -8,6 +12,11 @@ export async function GET() {
     const auth = await requireApiSession();
     if (auth.response) {
       return auth.response;
+    }
+
+    const roleResponse = requireAccountType(auth.session.user, "agent");
+    if (roleResponse) {
+      return roleResponse;
     }
 
     const supabase = getSupabaseServerClient();
@@ -60,6 +69,11 @@ export async function PATCH(request: Request) {
     const auth = await requireApiSession();
     if (auth.response) {
       return auth.response;
+    }
+
+    const roleResponse = requireAccountType(auth.session.user, "agent");
+    if (roleResponse) {
+      return roleResponse;
     }
 
     const body = (await request.json()) as { id?: string; saved?: boolean };

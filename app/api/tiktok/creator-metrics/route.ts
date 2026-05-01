@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { mapPageRow, type PageRow } from "@/lib/page-mapper";
-import { requireApiSession, withRefreshedSessionCookies } from "@/lib/route-auth";
+import {
+  requireAccountType,
+  requireApiSession,
+  withRefreshedSessionCookies,
+} from "@/lib/route-auth";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 import {
   loadTikTokAccountMetrics,
@@ -24,6 +28,11 @@ export async function POST(request: Request) {
     const auth = await requireApiSession();
     if (auth.response) {
       return auth.response;
+    }
+
+    const roleResponse = requireAccountType(auth.session.user, "creator");
+    if (roleResponse) {
+      return roleResponse;
     }
 
     const body = (await request.json()) as { handle?: string; price?: number };

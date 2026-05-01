@@ -27,7 +27,11 @@ export async function POST(request: Request) {
 
     const resolvedEmail = session.user?.email ?? email;
     const response = NextResponse.json({
-      user: { id: session.user?.id ?? "", email: resolvedEmail },
+      user: {
+        id: session.user?.id ?? "",
+        email: resolvedEmail,
+        accountType: session.user?.accountType ?? "agent",
+      },
     });
     setAuthCookies(response, session.tokens);
     return response;

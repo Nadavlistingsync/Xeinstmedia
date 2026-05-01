@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { enforceCreatorAccountLimit } from "@/lib/creator-accounts";
+import { requireAccountType, requireApiSession } from "@/lib/route-auth";
 import { createTikTokAuthorizeUrl, normalizeHandle } from "@/lib/tiktok";
-import { requireApiSession } from "@/lib/route-auth";
 
 const stateCookieName = "renttok_tiktok_oauth_state";
 
@@ -10,6 +10,11 @@ export async function GET(request: Request) {
     const auth = await requireApiSession();
     if (auth.response) {
       return auth.response;
+    }
+
+    const roleResponse = requireAccountType(auth.session.user, "creator");
+    if (roleResponse) {
+      return roleResponse;
     }
 
     const url = new URL(request.url);

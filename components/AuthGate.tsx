@@ -2,10 +2,11 @@
 
 import { Eye, EyeOff } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
+import { CreatorPortal } from "@/components/CreatorPortal";
 import { MarketplaceApp } from "@/components/MarketplaceApp";
 
 type SessionResponse = {
-  user: null | { id: string; email: string };
+  user: null | { id: string; email: string; accountType: "agent" | "creator" };
 };
 
 export function AuthGate() {
@@ -17,7 +18,7 @@ export function AuthGate() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState("");
-  const [user, setUser] = useState<null | { id: string; email: string }>(null);
+  const [user, setUser] = useState<null | { id: string; email: string; accountType: "agent" | "creator" }>(null);
 
   useEffect(() => {
     void (async () => {
@@ -48,7 +49,7 @@ export function AuthGate() {
         }),
       });
       const payload = (await response.json()) as {
-        user?: { id?: string; email?: string };
+        user?: { id?: string; email?: string; accountType?: "agent" | "creator" };
         message?: string;
       };
 
@@ -64,6 +65,7 @@ export function AuthGate() {
       setUser({
         id: payload.user.id ?? "unknown",
         email: payload.user.email,
+        accountType: payload.user.accountType === "creator" ? "creator" : "agent",
       });
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Authentication failed.");
@@ -77,7 +79,11 @@ export function AuthGate() {
   }
 
   if (user) {
-    return <MarketplaceApp user={user} />;
+    return user.accountType === "creator" ? (
+      <CreatorPortal user={user} />
+    ) : (
+      <MarketplaceApp user={user} />
+    );
   }
 
   return (
@@ -85,7 +91,11 @@ export function AuthGate() {
       <section>
         <p className="eyebrow">RentTok Access</p>
         <h1>{mode === "login" ? "Log In" : "Sign Up"}</h1>
-        <p>Use your email and password to access the NYC marketplace.</p>
+        <p>
+          {mode === "signup"
+            ? "Choose whether this account is for an agent or a creator."
+            : "Use your email and password to access your dashboard."}
+        </p>
         <form className="booking-form" onSubmit={onSubmit}>
           {mode === "signup" ? (
             <label>

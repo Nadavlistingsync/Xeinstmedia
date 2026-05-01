@@ -140,11 +140,6 @@ export function MarketplaceApp({ user }: MarketplaceAppProps) {
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [bookingBusy, setBookingBusy] = useState(false);
   const [bookingError, setBookingError] = useState("");
-  const [creatorHandle, setCreatorHandle] = useState("@xeinstrentalsnyc");
-  const [creatorPrice, setCreatorPrice] = useState("");
-  const [creatorBusy, setCreatorBusy] = useState(false);
-  const [creatorMessage, setCreatorMessage] = useState("");
-
   const selectedPage = pages.find((page) => page.id === selectedId) ?? pages[0] ?? null;
 
   useEffect(() => {
@@ -197,35 +192,6 @@ export function MarketplaceApp({ user }: MarketplaceAppProps) {
     }
 
     void loadData();
-  }, []);
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const tiktokStatus = params.get("tiktok_connect");
-    const message = params.get("message");
-    const connectedHandle = params.get("handle");
-
-    if (!tiktokStatus) {
-      return;
-    }
-
-    if (tiktokStatus === "success") {
-      setCreatorMessage(
-        message || `Connected ${connectedHandle || "@xeinstrentalsnyc"} successfully.`,
-      );
-      if (connectedHandle) {
-        setCreatorHandle(connectedHandle);
-      }
-    } else {
-      setCreatorMessage(message || "TikTok connection failed.");
-    }
-
-    params.delete("tiktok_connect");
-    params.delete("message");
-    params.delete("handle");
-    const query = params.toString();
-    const nextUrl = `${window.location.pathname}${query ? `?${query}` : ""}`;
-    window.history.replaceState({}, "", nextUrl);
   }, []);
 
   const filteredPages = useMemo(() => {
@@ -524,60 +490,6 @@ export function MarketplaceApp({ user }: MarketplaceAppProps) {
     }
   }
 
-  async function pullCreatorMetrics() {
-    setCreatorBusy(true);
-    setCreatorMessage("");
-
-    try {
-      const response = await fetch("/api/tiktok/creator-metrics", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          handle: creatorHandle,
-          price: Number(creatorPrice),
-        }),
-      });
-      const data = (await response.json()) as {
-        page?: TikTokPage;
-        note?: string;
-        message?: string;
-        connectPath?: string;
-      };
-
-      if (response.status === 412 && data.connectPath) {
-        setCreatorMessage(data.message || "Connect TikTok first...");
-        window.location.assign(data.connectPath);
-        return;
-      }
-
-      if (!response.ok || !data.page) {
-        throw new Error(data.message || "Could not import creator metrics.");
-      }
-
-      setPages((current) => {
-        const withoutDuplicate = current.filter((page) => page.id !== data.page!.id);
-        return [data.page!, ...withoutDuplicate];
-      });
-      setSelectedId(data.page.id);
-      setCreatorMessage(data.note ?? "Creator imported.");
-    } catch (error) {
-      setCreatorMessage(
-        error instanceof Error
-          ? error.message
-          : "Could not import creator metrics.",
-      );
-    } finally {
-      setCreatorBusy(false);
-    }
-  }
-
-  function startTikTokConnect() {
-    const normalized = creatorHandle.trim() || "@xeinstrentalsnyc";
-    window.location.assign(
-      `/api/tiktok/connect/start?handle=${encodeURIComponent(normalized)}`,
-    );
-  }
-
   return (
     <main className="app-shell campaign-only-shell">
       <aside className="sidebar">
@@ -616,53 +528,30 @@ export function MarketplaceApp({ user }: MarketplaceAppProps) {
           </button>
         </div>
 
-        <form
-          className="creator-onboard"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void pullCreatorMetrics();
-          }}
-        >
+        <div className="creator-onboard">
           <div className="form-heading">
-            <strong>Onboard TikTok Page</strong>
+            <strong>Available Creator Pages</strong>
             <Sparkles size={16} />
           </div>
-          <p className="form-note">
-            Up to {MAX_CREATOR_ACCOUNTS} creator accounts for now.
-          </p>
-          <label>
-            TikTok Handle
-            <input
-              value={creatorHandle}
-              onChange={(event) => setCreatorHandle(event.target.value)}
-              placeholder="@xeinstrentalsnyc"
-            />
-          </label>
-          <label>
-            Post Price (USD)
-            <input
-              inputMode="numeric"
-              value={creatorPrice}
-              onChange={(event) => setCreatorPrice(event.target.value)}
-              placeholder="250"
-            />
-          </label>
-          <label>
-            Typical Delivery
-            <select defaultValue="3 days">
-              <option>2 days</option>
-              <option>3 days</option>
-              <option>4 days</option>
-            </select>
-          </label>
-          <button disabled={creatorBusy} type="submit">
-            {creatorBusy ? "Pulling metrics..." : "Pull Metrics"}
-          </button>
-          <button className="secondary-cta" type="button" onClick={startTikTokConnect}>
-            Connect TikTok
-          </button>
-          {creatorMessage ? <p>{creatorMessage}</p> : null}
-        </form>
+          <p className="form-note">Creators manage their own TikTok pages. Agents book from the active listings below.</p>
+          <div className="page-list-compact">
+            {filteredPages.slice(0, 5).map((page) => (
+              <button
+                key={page.id}
+                type="button"
+                className={selectedId === page.id ? "compact-page-row active" : "compact-page-row"}
+                onClick={() => setSelectedId(page.id)}
+              >
+                <span>
+                  <strong>{page.handle}</strong>
+                  <small>{compactNumber(page.followers)} followers</small>
+                </span>
+                <em>{currency(page.price)}</em>
+              </button>
+            ))}
+          </div>
+          {filteredPages.length === 0 ? <p>No creator pages are live yet.</p> : null}
+        </div>
       </aside>
 
       <section className="workspace">
