@@ -7,7 +7,7 @@ NYC-only TikTok rental marketplace for agents and creators.
 - Supabase email/password auth.
 - NYC creator listings that agents can book.
 - Save pages per user account.
-- Whop checkout for campaign payments.
+- No in-app payments for now. Agents send campaigns directly; Whop can be added later.
 - Video upload to Supabase Storage.
 - Agent dashboard + creator queue.
 - Manual creator workflow: agents upload the video, creators download it and post manually.
@@ -36,6 +36,7 @@ SUPABASE_ANON_KEY=
 SUPABASE_LISTING_VIDEO_BUCKET=listing-videos
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 
+# Optional later: Whop payments
 WHOP_API_KEY=
 WHOP_COMPANY_ID=
 WHOP_WEBHOOK_SECRET=
@@ -58,5 +59,5 @@ TIKTOK_LIVE_POSTING=false
 1. Sign in to the app.
 2. Choose **Creator** when creating the account.
 3. In the left sidebar, list handle `@xeinstrentalsnyc`.
-4. Set the post price and any reported stats you want agents to see.
+4. Set any reported stats you want agents to see.
 5. When an agent books a campaign, download the uploaded video from the creator queue and post it manually.

@@ -1,6 +1,4 @@
 "use client";
-
-import dynamic from "next/dynamic";
 import {
   BarChart3,
   Bell,
@@ -10,7 +8,6 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronsUpDown,
-  CircleDollarSign,
   Clock3,
   Eye,
   FileVideo,
@@ -36,18 +33,10 @@ import {
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
 import { compactNumber, currency, percent, todayLabel } from "@/lib/format";
 import { MAX_CREATOR_ACCOUNTS } from "@/lib/limits";
-import type { Campaign, CampaignStatus, CheckoutResponse, TikTokPage } from "@/lib/types";
-
-const WhopCheckout = dynamic(
-  () => import("@/components/WhopCheckout").then((module) => module.WhopCheckout),
-  {
-    ssr: false,
-    loading: () => <div className="checkout-placeholder">Preparing secure checkout...</div>,
-  },
-);
+import type { Campaign, CampaignStatus, TikTokPage } from "@/lib/types";
 
 type AppView = "marketplace" | "campaigns" | "creator";
-type BookingStep = "details" | "checkout" | "upload" | "review";
+type BookingStep = "details" | "upload" | "review";
 
 const navItems = [
   { id: "marketplace", label: "Marketplace", icon: Home },
@@ -135,7 +124,6 @@ export function MarketplaceApp({ user }: MarketplaceAppProps) {
   const [bookingStep, setBookingStep] = useState<BookingStep>("details");
   const [campaignTitle, setCampaignTitle] = useState("");
   const [agentEmail, setAgentEmail] = useState(user.email);
-  const [checkout, setCheckout] = useState<CheckoutResponse | null>(null);
   const [videoName, setVideoName] = useState("");
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [bookingBusy, setBookingBusy] = useState(false);
@@ -220,11 +208,6 @@ export function MarketplaceApp({ user }: MarketplaceAppProps) {
       .sort((a, b) => b.engagementRate - a.engagementRate);
   }, [pages, query, savedOnly]);
 
-  const totalSpend = useMemo(
-    () => campaigns.reduce((total, campaign) => total + campaign.paidAmount, 0),
-    [campaigns],
-  );
-
   async function toggleSaved(pageId: string) {
     const current = pages.find((page) => page.id === pageId);
     if (!current) return;
@@ -251,13 +234,13 @@ export function MarketplaceApp({ user }: MarketplaceAppProps) {
     }
   }
 
-  async function startCheckout() {
+  function startUploadFlow() {
     if (!selectedPage) {
       return;
     }
 
     if (!campaignTitle.trim()) {
-      setBookingError("Add a listing title before checkout.");
+      setBookingError("Add a listing title before continuing.");
       return;
     }
 
@@ -266,56 +249,6 @@ export function MarketplaceApp({ user }: MarketplaceAppProps) {
       return;
     }
 
-    if (selectedPage.price <= 0) {
-      setBookingError(
-        "This creator has not set a post price yet. Ask the creator to set a price first.",
-      );
-      return;
-    }
-
-    setBookingBusy(true);
-    setBookingError("");
-
-    try {
-      const response = await fetch("/api/checkout", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          pageId: selectedPage.id,
-          campaignTitle: campaignTitle.trim(),
-        }),
-      });
-
-      const data = (await response.json()) as CheckoutResponse;
-
-      if (!response.ok) {
-        throw new Error(data.message || "Checkout could not be created.");
-      }
-
-      setCheckout(data);
-      setBookingStep("checkout");
-    } catch (error) {
-      setBookingError(error instanceof Error ? error.message : "Checkout failed.");
-    } finally {
-      setBookingBusy(false);
-    }
-  }
-
-  function markPaymentComplete(receiptId?: string) {
-    const nextReceipt = receiptId ?? checkout?.receiptId;
-    if (!nextReceipt) {
-      setBookingError("Finish Whop checkout before uploading the video.");
-      return;
-    }
-
-    setCheckout((current) => ({
-      mode: current?.mode ?? "whop",
-      planId: current?.planId,
-      sessionId: current?.sessionId,
-      purchaseUrl: current?.purchaseUrl,
-      receiptId: nextReceipt,
-      message: "Payment confirmed. Upload the listing video.",
-    }));
     setBookingError("");
     setBookingStep("upload");
   }
@@ -332,8 +265,8 @@ export function MarketplaceApp({ user }: MarketplaceAppProps) {
   }
 
   async function sendCampaignToCreator() {
-    if (!selectedPage || !checkout || !checkout.receiptId || !videoFile) {
-      setBookingError("Payment receipt and video upload are both required.");
+    if (!selectedPage || !videoFile) {
+      setBookingError("Upload the listing video before sending the campaign.");
       return;
     }
 
@@ -366,11 +299,10 @@ export function MarketplaceApp({ user }: MarketplaceAppProps) {
           pageId: selectedPage.id,
           status: "Creator Approval",
           paymentStatus: "Paid",
-          paidAmount: selectedPage.price,
+          paidAmount: 0,
           videoName: uploadPayload.fileName,
           videoStoragePath: uploadPayload.storagePath,
           videoDuration: "0:30",
-          receiptId: checkout.receiptId,
         }),
       });
       const payload = (await response.json()) as {
@@ -395,7 +327,6 @@ export function MarketplaceApp({ user }: MarketplaceAppProps) {
   function closeBooking() {
     setBookingOpen(false);
     setBookingStep("details");
-    setCheckout(null);
     setVideoName("");
     setVideoFile(null);
     setBookingError("");
@@ -443,7 +374,6 @@ export function MarketplaceApp({ user }: MarketplaceAppProps) {
           body: JSON.stringify({
             id: campaignId,
             status: "Completed",
-            paymentStatus: "Released",
           }),
         });
         const payload = (await response.json()) as {
@@ -502,8 +432,8 @@ export function MarketplaceApp({ user }: MarketplaceAppProps) {
         </div>
 
         <div className="wallet-panel">
-          <span>Total Campaign Spend</span>
-          <strong>{currency(totalSpend)}</strong>
+          <span>Active Campaigns</span>
+          <strong>{campaigns.length}</strong>
           <button type="button" onClick={() => setBookingOpen(true)}>
             New Campaign
           </button>
@@ -596,7 +526,7 @@ export function MarketplaceApp({ user }: MarketplaceAppProps) {
 
           {!bookingOpen ? (
             <p className="eyebrow">
-              Start a booking to pay through Whop, upload a listing video, and send it to a creator.
+              Start a booking to upload a listing video and send it directly to a creator.
             </p>
           ) : (
             <>
@@ -621,14 +551,12 @@ export function MarketplaceApp({ user }: MarketplaceAppProps) {
                 bookingError={bookingError}
                 bookingStep={bookingStep}
                 campaignTitle={campaignTitle}
-                checkout={checkout}
                 page={selectedPage}
                 videoName={videoName}
                 onAgentEmailChange={setAgentEmail}
                 onCampaignTitleChange={setCampaignTitle}
-                onCheckout={startCheckout}
+                onContinue={startUploadFlow}
                 onClose={closeBooking}
-                onLivePayment={markPaymentComplete}
                 onSendCampaign={sendCampaignToCreator}
                 onVideoChange={handleVideoChange}
               />
@@ -780,7 +708,6 @@ function CampaignsView({
   onOpenVideo: (campaign: Campaign) => void;
 }) {
   const totalViews = campaigns.reduce((total, campaign) => total + (campaign.views ?? 0), 0);
-  const totalSpend = campaigns.reduce((total, campaign) => total + campaign.paidAmount, 0);
   const averageEngagement =
     campaigns
       .filter((campaign) => campaign.engagementRate)
@@ -802,7 +729,7 @@ function CampaignsView({
       <div className="dashboard-metrics">
         <Metric label="Total Views" value={compactNumber(totalViews)} />
         <Metric label="Active Pages" value={String(new Set(campaigns.map((campaign) => campaign.pageId)).size)} />
-        <Metric label="Total Spend" value={currency(totalSpend)} />
+        <Metric label="Campaigns" value={String(campaigns.length)} />
         <Metric label="Avg. Engagement" value={percent(Number.isFinite(averageEngagement) ? averageEngagement : 0)} />
       </div>
       <CampaignPipeline campaigns={campaigns} />
@@ -880,7 +807,7 @@ function CreatorQueueView({
               {campaign.status === "Posted" ? (
                 <button onClick={() => onRelease(campaign.id)} type="button">
                   <Check size={16} />
-                  Release Payout
+                  Mark Complete
                 </button>
               ) : null}
               <button aria-label="More actions" type="button">
@@ -982,7 +909,7 @@ function CampaignTable({
               <button onClick={() => onMarkPosted(campaign.id)} type="button">Post</button>
             ) : null}
             {!compact && campaign.status === "Posted" ? (
-              <button onClick={() => onRelease(campaign.id)} type="button">Release</button>
+              <button onClick={() => onRelease(campaign.id)} type="button">Complete</button>
             ) : null}
             <button aria-label="More campaign actions" type="button">
               <MoreVertical size={16} />
@@ -1000,14 +927,12 @@ function BookingPanel({
   bookingError,
   bookingStep,
   campaignTitle,
-  checkout,
   page,
   videoName,
   onAgentEmailChange,
   onCampaignTitleChange,
-  onCheckout,
+  onContinue,
   onClose,
-  onLivePayment,
   onSendCampaign,
   onVideoChange,
 }: {
@@ -1016,26 +941,22 @@ function BookingPanel({
   bookingError: string;
   bookingStep: BookingStep;
   campaignTitle: string;
-  checkout: CheckoutResponse | null;
   page: TikTokPage | null;
   videoName: string;
   onAgentEmailChange: (value: string) => void;
   onCampaignTitleChange: (value: string) => void;
-  onCheckout: () => void;
+  onContinue: () => void;
   onClose: () => void;
-  onLivePayment: (receiptId: string) => void;
   onSendCampaign: () => void | Promise<void>;
   onVideoChange: (event: ChangeEvent<HTMLInputElement>) => void;
 }) {
-  const [manualReceiptId, setManualReceiptId] = useState("");
-
   if (!page) {
     return (
       <div className="booking-panel">
         <div className="booking-head">
-          <strong>Book sponsored post</strong>
+          <strong>Book creator post</strong>
         </div>
-        <p className="error-text">Select a creator page from Supabase before starting checkout.</p>
+        <p className="error-text">Select a creator page from Supabase before starting the request.</p>
       </div>
     );
   }
@@ -1043,14 +964,14 @@ function BookingPanel({
   return (
     <div className="booking-panel">
       <div className="booking-head">
-        <strong>Book sponsored post</strong>
+        <strong>Book creator post</strong>
         <button aria-label="Close booking" onClick={onClose} type="button">
           <X size={16} />
         </button>
       </div>
 
       <div className="booking-steps">
-        {(["details", "checkout", "upload", "review"] as BookingStep[]).map((step, index) => (
+        {(["details", "upload", "review"] as BookingStep[]).map((step, index) => (
           <span className={bookingStep === step ? "current" : ""} key={step}>
             {index + 1}
           </span>
@@ -1078,60 +999,16 @@ function BookingPanel({
           <div className="booking-summary">
             <span>Creator</span>
             <strong>{page.handle}</strong>
-            <span>Post price</span>
-            <strong>{currency(page.price)}</strong>
             <span>Delivery</span>
             <strong>{page.deliveryDays}-{page.deliveryDays + 1} days</strong>
+            <span>Workflow</span>
+            <strong>Manual creator post</strong>
           </div>
           {bookingError ? <p className="error-text">{bookingError}</p> : null}
-          <button className="primary-cta" disabled={bookingBusy} onClick={onCheckout} type="button">
-            <CircleDollarSign size={18} />
-            {bookingBusy ? "Creating checkout..." : "Continue to Whop"}
+          <button className="primary-cta" disabled={bookingBusy} onClick={onContinue} type="button">
+            <Upload size={18} />
+            Continue to Upload
           </button>
-        </div>
-      ) : null}
-
-      {bookingStep === "checkout" ? (
-        <div className="checkout-step">
-          {checkout?.mode === "whop" ? (
-            <>
-              {checkout.planId ? (
-                <WhopCheckout
-                  planId={checkout.planId}
-                  sessionId={checkout.sessionId}
-                  onComplete={onLivePayment}
-                />
-              ) : null}
-              {checkout.purchaseUrl ? (
-                <a href={checkout.purchaseUrl} rel="noreferrer" target="_blank">
-                  Open hosted Whop checkout
-                </a>
-              ) : null}
-              <label>
-                Whop receipt ID
-                <input
-                  placeholder="receipt_..."
-                  value={manualReceiptId}
-                  onChange={(event) => setManualReceiptId(event.target.value)}
-                />
-              </label>
-              <button
-                className="secondary-cta"
-                type="button"
-                onClick={() => onLivePayment(manualReceiptId.trim())}
-                disabled={!manualReceiptId.trim()}
-              >
-                I Completed Payment
-              </button>
-            </>
-          ) : (
-            <div className="demo-checkout">
-              <CircleDollarSign size={22} />
-              <strong>Whop checkout unavailable</strong>
-              <p>{checkout?.message || "Create a checkout session to continue."}</p>
-            </div>
-          )}
-          {bookingError ? <p className="error-text">{bookingError}</p> : null}
         </div>
       ) : null}
 
@@ -1140,7 +1017,7 @@ function BookingPanel({
           <label className="upload-drop">
             <Upload size={22} />
             <strong>{videoName || "Upload listing video"}</strong>
-            <span>MP4, MOV, or WebM. Creator receives this after payment.</span>
+            <span>MP4, MOV, or WebM. Creator downloads this from their dashboard.</span>
             <input accept="video/mp4,video/quicktime,video/webm" onChange={onVideoChange} type="file" />
           </label>
           {bookingError ? <p className="error-text">{bookingError}</p> : null}
@@ -1160,7 +1037,7 @@ function BookingPanel({
         <div className="review-step">
           <CheckCircle2 size={24} />
           <strong>Campaign sent to creator</strong>
-          <p>The agent dashboard now tracks approval, posting, views, likes, comments, and payout status.</p>
+          <p>The agent dashboard now tracks approval, posting, views, likes, and comments.</p>
           <button className="secondary-cta" onClick={onClose} type="button">
             Done
           </button>

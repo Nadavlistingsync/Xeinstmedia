@@ -97,9 +97,9 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!Number.isFinite(paidAmount) || paidAmount <= 0) {
+    if (!Number.isFinite(paidAmount) || paidAmount < 0) {
       return NextResponse.json(
-        { message: "Paid amount must be greater than zero." },
+        { message: "Paid amount must be zero or greater." },
         { status: 400 },
       );
     }
@@ -107,13 +107,6 @@ export async function POST(request: Request) {
     if (!videoName || !videoStoragePath) {
       return NextResponse.json(
         { message: "Upload a video before sending the campaign." },
-        { status: 400 },
-      );
-    }
-
-    if (!receiptId) {
-      return NextResponse.json(
-        { message: "A payment receipt is required before campaign creation." },
         { status: 400 },
       );
     }
