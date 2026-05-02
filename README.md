@@ -5,12 +5,12 @@ NYC-only TikTok rental marketplace for agents and creators.
 ## Features
 
 - Supabase email/password auth.
-- Marketplace for NYC TikTok rental pages.
+- NYC creator listings that agents can book.
 - Save pages per user account.
 - Whop checkout for campaign payments.
 - Video upload to Supabase Storage.
 - Agent dashboard + creator queue.
-- TikTok OAuth connect and creator metrics import (including `@xeinstrentalsnyc`).
+- Manual creator workflow: agents upload the video, creators download it and post manually.
 
 ## Run locally
 
@@ -42,6 +42,7 @@ WHOP_WEBHOOK_SECRET=
 NEXT_PUBLIC_WHOP_APP_ID=
 NEXT_PUBLIC_WHOP_ENVIRONMENT=sandbox
 
+# Optional future TikTok API setup
 TIKTOK_CLIENT_KEY=
 TIKTOK_CLIENT_SECRET=
 TIKTOK_REDIRECT_URI=http://localhost:3000/api/tiktok/connect/callback
@@ -52,9 +53,10 @@ TIKTOK_LIVE_POSTING=false
 
 `@vercel/analytics` is already enabled in the app. Keep Web Analytics enabled in your Vercel project settings.
 
-## First TikTok connect (`@xeinstrentalsnyc`)
+## Manual creator setup (`@xeinstrentalsnyc`)
 
 1. Sign in to the app.
-2. In the left sidebar, set handle to `@xeinstrentalsnyc`.
-3. Click **Connect TikTok** and approve permissions.
-4. Click **Pull Metrics** to import live profile/video stats into the marketplace.
+2. Choose **Creator** when creating the account.
+3. In the left sidebar, list handle `@xeinstrentalsnyc`.
+4. Set the post price and any reported stats you want agents to see.
+5. When an agent books a campaign, download the uploaded video from the creator queue and post it manually.
