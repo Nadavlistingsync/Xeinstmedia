@@ -1,4 +1,5 @@
 import type { NextResponse } from "next/server";
+import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase-env";
 
 const ONE_WEEK = 60 * 60 * 24 * 7;
 
@@ -69,11 +70,13 @@ function normalizeSessionUser(user?: SupabaseAuthUser | null) {
 }
 
 export function getSupabaseAuthConfig() {
-  const url = process.env.SUPABASE_URL;
-  const anonKey = process.env.SUPABASE_ANON_KEY;
+  const url = getSupabaseUrl();
+  const anonKey = getSupabaseAnonKey();
 
   if (!url || !anonKey) {
-    throw new Error("SUPABASE_URL and SUPABASE_ANON_KEY are required for auth.");
+    throw new Error(
+      "Supabase auth env is missing. Set SUPABASE_URL + SUPABASE_ANON_KEY, or the compatible NEXT_PUBLIC / STORAGE_SUPABASE values in Vercel.",
+    );
   }
 
   return { url, anonKey };

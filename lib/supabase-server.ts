@@ -1,11 +1,14 @@
 import { createClient } from "@supabase/supabase-js";
+import { getSupabaseServiceKey, getSupabaseUrl } from "@/lib/supabase-env";
 
 export function getSupabaseServerClient() {
-  const url = process.env.SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const url = getSupabaseUrl();
+  const serviceRoleKey = getSupabaseServiceKey();
 
   if (!url || !serviceRoleKey) {
-    throw new Error("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.");
+    throw new Error(
+      "Supabase server env is missing. Set SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY, or the STORAGE_SUPABASE_* equivalents in Vercel.",
+    );
   }
 
   return createClient(url, serviceRoleKey, {
